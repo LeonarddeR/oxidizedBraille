@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from logHandler import log
 
 from . import louis_py
-from .cells import isUnicodeBraille, normalizeCursor, unicodeToCells
+from .cells import cellsToUnicode, isUnicodeBraille, normalizeCursor, stripUnicodeBraille, unicodeToCells
 
 TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
 """Environment variable louis-rs reads to locate tables and their includes."""
@@ -139,3 +139,15 @@ def translateText(
 	else:
 		brailleCursorPos = result.cursor_pos
 	return cells, brailleToRawPos, rawToBraillePos, brailleCursorPos
+
+
+def backTranslateCells(compiled: louis_py.Translator, cells: Sequence[int], *, mode: int) -> str:
+	"""Back-translate cells the way ``louisHelper.backTranslate`` does, dropping undefined cells.
+
+	louis-rs renders a cell it cannot back-translate as an escape made of braille characters,
+	so removing braille characters from the output leaves only the translated text.
+	"""
+	braille = cellsToUnicode(cells)
+	if not braille:
+		return ""
+	return stripUnicodeBraille(compiled.translate_with_options(braille, mode=mode).output)

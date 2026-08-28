@@ -136,7 +136,7 @@ class TestFallback(unittest.TestCase):
 		self.assertEqual(cache.cleared, 1)
 
 
-class TestTranslate(unittest.TestCase):
+class PatchTestCase(unittest.TestCase):
 	def setUp(self):
 		import louisHelper
 		from globalPlugins.oxidizedBraille import translator
@@ -156,6 +156,8 @@ class TestTranslate(unittest.TestCase):
 		self.louisPatch._original = (self.originalTranslate, self.originalBackTranslate)
 		self.translator = translator
 
+
+class TestTranslate(PatchTestCase):
 	def test_returns_louis_rs_cells_without_calling_the_original(self):
 		self.assertEqual(
 			self.louisPatch.translate(["mini.ctb"], "abc"),
@@ -195,3 +197,30 @@ class TestTranslate(unittest.TestCase):
 		self.addCleanup(setattr, self.translator, "translateText", self.translator.translateText)
 		self.translator.translateText = failing
 		self.assertEqual(self.louisPatch.translate(["mini.ctb"], "abc"), ("original",))
+
+
+class TestBackTranslate(PatchTestCase):
+	def test_round_trip_through_louis_rs(self):
+		cells = self.louisPatch.translate(["mini.ctb"], "abc")[0]
+		self.assertEqual(self.louisPatch.backTranslate(["mini.ctb"], cells), "abc")
+		self.assertEqual(self.originalBackTranslate.calls, [])
+
+	def test_escaped_undefined_cells_are_dropped(self):
+		self.assertEqual(self.louisPatch.backTranslate(["mini.ctb"], [1, 0x3F, 3]), "ab")
+
+	def test_no_cells_give_empty_string(self):
+		self.assertEqual(self.louisPatch.backTranslate(["mini.ctb"], []), "")
+
+	def test_mode_is_mapped_and_undefined_cells_are_suppressed(self):
+		spy = SpyFunction("")
+		self.addCleanup(setattr, self.translator, "backTranslateCells", self.translator.backTranslateCells)
+		self.translator.backTranslateCells = spy
+		self.louisPatch.backTranslate(["mini.ctb"], [1], mode=256)
+		self.assertEqual(
+			spy.calls[0][1]["mode"],
+			int(louis_py.TranslationMode.PARTIAL_TRANS | louis_py.TranslationMode.NO_UNDEFINED),
+		)
+
+	def test_broken_table_falls_back_with_the_same_arguments(self):
+		self.assertEqual(self.louisPatch.backTranslate(["broken.ctb"], [1, 3], mode=256), "original")
+		self.assertEqual(self.originalBackTranslate.calls, [((["broken.ctb"], [1, 3], 256), {})])
