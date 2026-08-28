@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from logHandler import log
 
 from . import louis_py
+from .cells import isUnicodeBraille, normalizeCursor, unicodeToCells
 
 TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
 """Environment variable louis-rs reads to locate tables and their includes."""
@@ -96,3 +97,45 @@ def isRecoverable(exc: BaseException) -> bool:
 	Rust panics reach Python as ``pyo3_runtime.PanicException``, a ``BaseException`` subclass.
 	"""
 	return isinstance(exc, Exception) or type(exc).__name__ == "PanicException"
+
+
+class PositionError(louis_py.LouisError):
+	"""louis-rs returned position lists that do not match the text or the output."""
+
+
+def translateText(
+	compiled: louis_py.Translator,
+	text: str,
+	*,
+	mode: int,
+	emphasis: Sequence[tuple[str, int, int]],
+	cursorPos: int | None,
+) -> tuple[list[int], list[int], list[int], int | None]:
+	"""Translate ``text`` and shape the result like ``louisHelper.translate`` does."""
+	result = compiled.translate_with_options(
+		text,
+		mode=mode,
+		emphasis=list(emphasis) or None,
+		cursor_pos=normalizeCursor(cursorPos, len(text)),
+	)
+	output = result.output
+	cells = unicodeToCells(output)
+	nonBraille = [f"U+{ord(char):04X}" for char in output if not isUnicodeBraille(char)]
+	if nonBraille:
+		log.debug(
+			f"louis-rs produced characters outside the braille block, shown as full cells: {nonBraille}",
+		)
+	brailleToRawPos = list(result.input_positions or [])
+	rawToBraillePos = list(result.output_positions or [])
+	if len(brailleToRawPos) != len(cells) or len(rawToBraillePos) != len(text):
+		raise PositionError(
+			f"Position lists do not match: {len(brailleToRawPos)} entries for {len(cells)} cells, "
+			f"{len(rawToBraillePos)} entries for {len(text)} characters",
+		)
+	if cursorPos is None:
+		brailleCursorPos = None
+	elif result.cursor_pos is None:
+		brailleCursorPos = min(max(cursorPos, 0), len(cells))
+	else:
+		brailleCursorPos = result.cursor_pos
+	return cells, brailleToRawPos, rawToBraillePos, brailleCursorPos

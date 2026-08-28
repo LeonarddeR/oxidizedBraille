@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from dataclasses import dataclass
 
 from globalPlugins.oxidizedBraille import louis_py, translator
 from logHandler import log
@@ -142,3 +143,64 @@ class TestIsRecoverable(unittest.TestCase):
 
 	def test_keyboard_interrupt_is_not_recoverable(self):
 		self.assertFalse(translator.isRecoverable(KeyboardInterrupt()))
+
+
+@dataclass
+class FakeResult:
+	output: str
+	input_positions: list[int]
+	output_positions: list[int]
+	cursor_pos: int | None
+
+
+class FakeTranslator:
+	def __init__(self, result: FakeResult):
+		self.result = result
+
+	def translate_with_options(self, text: str, **kwargs: object) -> FakeResult:
+		return self.result
+
+
+class TestTranslateText(unittest.TestCase):
+	def setUp(self):
+		log.records.clear()
+		with translator.tablePath([TABLES]):
+			self.mini = louis_py.Translator([MINI])
+
+	def translate(self, text: str, cursorPos: int | None = None):
+		return translator.translateText(self.mini, text, mode=0, emphasis=[], cursorPos=cursorPos)
+
+	def test_returns_cells_positions_and_cursor(self):
+		self.assertEqual(self.translate("abc", cursorPos=1), ([1, 3, 9], [0, 1, 2], [0, 1, 2], 1))
+
+	def test_cursor_none_stays_none(self):
+		self.assertIsNone(self.translate("abc")[3])
+
+	def test_cursor_past_end_maps_to_end_of_cells(self):
+		self.assertEqual(self.translate("abc", cursorPos=10)[3], 3)
+
+	def test_negative_cursor_is_clamped_to_start(self):
+		self.assertEqual(self.translate("abc", cursorPos=-1)[3], 0)
+
+	def test_empty_text_gives_empty_lists(self):
+		self.assertEqual(self.translate("", cursorPos=0), ([], [], [], 0))
+
+	def test_undefined_character_keeps_lists_aligned(self):
+		cells, brailleToRawPos, rawToBraillePos, _ = self.translate("a1c")
+		self.assertTrue(all(0 <= cell <= 0xFF for cell in cells))
+		self.assertEqual(len(brailleToRawPos), len(cells))
+		self.assertEqual(len(rawToBraillePos), 3)
+
+	def test_mismatched_position_lists_raise_position_error(self):
+		fake = FakeTranslator(FakeResult("\u2801\u2803", [0], [0, 1], None))
+		with self.assertRaises(translator.PositionError):
+			translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
+
+	def test_position_error_is_a_louis_error(self):
+		self.assertTrue(issubclass(translator.PositionError, louis_py.LouisError))
+
+	def test_non_braille_output_becomes_full_cells_and_is_logged(self):
+		fake = FakeTranslator(FakeResult("\u2801x", [0, 1], [0, 1], None))
+		cells, _, _, _ = translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
+		self.assertEqual(cells, [1, 0xFF])
+		self.assertEqual(len(log.recordsAt("debug")), 1)
