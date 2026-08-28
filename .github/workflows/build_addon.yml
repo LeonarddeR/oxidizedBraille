@@ -3,14 +3,12 @@ name: build addon
 on:
   push:
     tags: ["*"]
-    # To build on main/master branch, uncomment the following line:
-    # branches: [ main , master ]
+    branches: [ main, master ]
 
   pull_request:
     branches: [ main, master ]
 
   workflow_dispatch:
-  workflow_call:
 
 jobs:
   build:
@@ -18,23 +16,29 @@ jobs:
     # Do not modify this repo name with your own one! (should remain the template)
     if: github.repository != 'nvaccess/addonTemplate'
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - name: Checkout repo
       uses: actions/checkout@v7
+    - name: Prepare NVDA source for ty
+      id: nvda
+      uses: LeonarddeR/prepare-nvda-source@4f9e3b5321987e9db1cbb7c778bfff951629fa28
+      with:
+        nvda-ref: master
+        path: ../nvda
+        github-token: ${{ github.token }}
     - name: Install uv
       uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
+    - name: Add NVDA's gettext tools to PATH
+      run: Add-Content $env:GITHUB_PATH "${{ steps.nvda.outputs.nvda-path }}/miscDeps/tools"
     - name: Install dependencies
-      run: |
-        sudo apt-get update  -y
-        sudo apt-get install -y gettext
-        uv sync
+      run: uv sync
 
     - name: Code checks
-      run: export PREK_SKIP=no-commit-to-branch; uv run prek run --all-files
+      run: $env:PREK_SKIP = "no-commit-to-branch"; uv run prek run --all-files
 
     - name: building addon
       run: uv run scons && uv run scons pot

@@ -1,7 +1,12 @@
 # Build customizations
 # Change this file instead of sconstruct or manifest files, whenever possible.
 
-from site_scons.site_tools.NVDATool.typings import AddonInfo, BrailleTables, SymbolDictionaries, SpeechDictionaries
+from site_scons.site_tools.NVDATool.typings import (
+	AddonInfo,
+	BrailleTables,
+	SpeechDictionaries,
+	SymbolDictionaries,
+)
 
 # Since some strings in `addon_info` are translatable,
 # we need to include them in the .po files.
@@ -13,52 +18,47 @@ from site_scons.site_tools.NVDATool.utils import _
 # Add-on information variables
 addon_info = AddonInfo(
 	# add-on Name/identifier, internal for NVDA
-	addon_name="addonTemplate",
+	addon_name="oxidizedBraille",
 	# Add-on summary/title, usually the user visible name of the add-on
 	# Translators: Summary/title for this add-on
 	# to be shown on installation and add-on information found in add-on store
-	addon_summary=_("Add-on user visible name"),
+	addon_summary=_("Oxidized Braille Translation"),
 	# Add-on description
 	# Translators: Long description to be shown for this add-on on add-on information from add-on store
-	addon_description=_("""Description for the add-on.
-It can span multiple lines."""),
+	addon_description=_(
+		"Braille translation powered by louis-rs, a Rust re-implementation of liblouis. Experimental.",
+	),
 	# version
-	addon_version="x.y",
+	addon_version="0.1.0",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""Changelog for the add-on version.
-It can span multiple lines."""),
+	addon_changelog=_("Initial experimental release."),
 	# Author(s)
-	addon_author="name <name@domain.com>",
+	addon_author="Leonard de Ruijter <alderuijter@gmail.com>",
 	# URL for the add-on documentation support
-	addon_url=None,
+	addon_url="https://github.com/LeonarddeR/oxidizedBraille",
 	# URL for the add-on repository where the source code can be found
-	addon_sourceURL=None,
+	addon_sourceURL="https://github.com/LeonarddeR/oxidizedBraille",
 	# Documentation file name
 	addon_docFileName="readme.html",
 	# Minimum NVDA version supported (e.g. "2019.3.0", minor version is optional)
-	addon_minimumNVDAVersion=None,
+	addon_minimumNVDAVersion="2026.3",
 	# Last NVDA version supported/tested (e.g. "2024.4.0", ideally more recent than minimum version)
-	addon_lastTestedNVDAVersion=None,
+	addon_lastTestedNVDAVersion="2026.3",
 	# Add-on update channel (default is None, denoting stable releases,
 	# and for development releases, use "dev".)
 	# Do not change unless you know what you are doing!
 	addon_updateChannel=None,
 	# Add-on license such as GPL 2
-	addon_license=None,
+	addon_license="GPL v2",
 	# URL for the license document the ad-on is licensed under
-	addon_licenseURL=None,
+	addon_licenseURL="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
 )
 
 # Define the python files that are the sources of your add-on.
-# You can either list every file (using ""/") as a path separator,
-# or use glob expressions.
-# For example to include all files with a ".py" extension from the "globalPlugins" dir of your add-on
-# the list can be written as follows:
-# pythonSources = ["addon/globalPlugins/*.py"]
-# For more information on SCons Glob expressions please take a look at:
-# https://scons.org/doc/production/HTML/scons-user/apd.html
-pythonSources: list[str] = []
+# A single-level glob on purpose: the vendored louis_py subpackage is shipped by the bundler
+# but must not be handed to gettext.
+pythonSources: list[str] = ["addon/globalPlugins/oxidizedBraille/*.py"]
 
 # Files that contain strings for translation. Usually your python sources
 i18nSources: list[str] = pythonSources + ["buildVars.py"]
@@ -67,7 +67,7 @@ i18nSources: list[str] = pythonSources + ["buildVars.py"]
 # Paths are relative to the addon directory, not to the root directory of your addon sources.
 # You can either list every file (using ""/") as a path separator,
 # or use glob expressions.
-excludedFiles: list[str] = []
+excludedFiles: list[str] = ["*.pdb", "*.pyc", "__pycache__/*"]
 
 # Base language for the NVDA add-on
 # If your add-on is written in a language other than english, modify this variable.
@@ -103,7 +103,8 @@ symbolDictionaries: SymbolDictionaries = {}
 
 # Custom speech dictionaries (distinct from symbol dictionaries above)
 # Speech dictionary files reside in the speechDicts folder and are named `name.dic`.
-# If your add-on includes custom speech (pronunciation) dictionaries (most will not), fill out this dictionary.
+# If your add-on includes custom speech (pronunciation) dictionaries (most will not),
+# fill out this dictionary.
 # Each key is the name of the dictionary,
 # with keys inside recording the following attributes:
 # displayName (name of the speech dictionary shown to users and translatable),
