@@ -1,1 +1,3 @@
-Use this file to explain what has changed in your add-on since the previous release. This will be included automatically in the release description when used with GitHub actions.
+## 0.1.0
+
+Initial experimental release. Braille translation and braille input back-translation in NVDA go through louis-rs; liblouis stays in use for tables louis-rs cannot compile and for everything else.
