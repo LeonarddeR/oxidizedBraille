@@ -111,6 +111,24 @@ class LouisHelperPatch:
 			fallback=lambda: self._originalTranslate(tableList, inbuf, typeform, cursorPos, mode),
 		)
 
+	@property
+	def _originalBackTranslate(self) -> Callable[..., Any]:
+		if self._original is None:
+			raise RuntimeError("The patch is not installed")
+		return self._original[1]
+
+	def backTranslate(self, tableList: list[str], cells: list[int], mode: int = 0) -> str:
+		return self._run(
+			tableList,
+			True,
+			work=lambda compiled: translator.backTranslateCells(
+				compiled,
+				cells,
+				mode=mapFlags(mode, self._modeMap) | int(louis_py.TranslationMode.NO_UNDEFINED),
+			),
+			fallback=lambda: self._originalBackTranslate(tableList, cells, mode),
+		)
+
 	def clearCache(self) -> None:
 		self._cache.clear()
 		self._broken.clear()

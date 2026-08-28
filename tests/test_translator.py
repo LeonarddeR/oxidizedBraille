@@ -204,3 +204,25 @@ class TestTranslateText(unittest.TestCase):
 		cells, _, _, _ = translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
 		self.assertEqual(cells, [1, 0xFF])
 		self.assertEqual(len(log.recordsAt("debug")), 1)
+
+
+class TestBackTranslateCells(unittest.TestCase):
+	def setUp(self):
+		with translator.tablePath([TABLES]):
+			self.mini = louis_py.Translator([MINI], louis_py.Direction.BACKWARD)
+
+	def test_cells_are_back_translated(self):
+		self.assertEqual(translator.backTranslateCells(self.mini, [1, 3], mode=0), "ab")
+
+	def test_escaped_undefined_cells_are_dropped(self):
+		self.assertEqual(translator.backTranslateCells(self.mini, [1, 0x3F, 3], mode=0), "ab")
+
+	def test_cells_are_masked_to_a_byte(self):
+		self.assertEqual(translator.backTranslateCells(self.mini, [0x101, 0x103], mode=0), "ab")
+
+	def test_no_cells_give_empty_string_without_translating(self):
+		class Untouchable:
+			def translate_with_options(self, *args: object, **kwargs: object) -> object:
+				raise AssertionError("must not be called")
+
+		self.assertEqual(translator.backTranslateCells(Untouchable(), [], mode=0), "")
