@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from logHandler import log
 
@@ -19,6 +19,13 @@ T = TypeVar("T")
 
 BrokenKey = tuple[tuple[str, ...], bool]
 """Table names as NVDA passes them, plus whether the direction is backward."""
+
+
+class LouisHelperModule(Protocol):
+	"""The part of NVDA's louisHelper module this patch replaces."""
+
+	translate: Callable[..., Any]
+	backTranslate: Callable[..., Any]
 
 
 class LouisHelperPatch:
@@ -128,6 +135,32 @@ class LouisHelperPatch:
 			),
 			fallback=lambda: self._originalBackTranslate(tableList, cells, mode),
 		)
+
+	def install(self, module: LouisHelperModule) -> None:
+		"""Replace ``module.translate`` and ``module.backTranslate`` with this patch's methods."""
+		if self._original is not None:
+			raise RuntimeError("The patch is already installed")
+		for name in ("translate", "backTranslate"):
+			if isinstance(getattr(getattr(module, name), "__self__", None), LouisHelperPatch):
+				raise RuntimeError(f"{name} is already patched by another instance")
+		self._original = (module.translate, module.backTranslate)
+		module.translate = self.translate
+		module.backTranslate = self.backTranslate
+
+	def uninstall(self, module: LouisHelperModule) -> None:
+		"""Restore the functions captured by :meth:`install`, unless someone else replaced them since."""
+		if self._original is None:
+			return
+		originals = zip(("translate", "backTranslate"), self._original, strict=True)
+		for name, original in originals:
+			if getattr(getattr(module, name), "__self__", None) is self:
+				setattr(module, name, original)
+			else:
+				log.warning(
+					f"{name} was replaced by something else after this add-on patched it; leaving it alone",
+				)
+		self._original = None
+		self.clearCache()
 
 	def clearCache(self) -> None:
 		self._cache.clear()

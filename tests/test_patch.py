@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import types
 import unittest
 from typing import Any
 
@@ -224,3 +225,64 @@ class TestBackTranslate(PatchTestCase):
 	def test_broken_table_falls_back_with_the_same_arguments(self):
 		self.assertEqual(self.louisPatch.backTranslate(["broken.ctb"], [1, 3], mode=256), "original")
 		self.assertEqual(self.originalBackTranslate.calls, [((["broken.ctb"], [1, 3], 256), {})])
+
+
+class TestInstall(unittest.TestCase):
+	def setUp(self):
+		log.records.clear()
+		self.cache = FakeCache()
+		self.louisPatch = makePatch(self.cache)
+		self.originalTranslate = SpyFunction(("original",))
+		self.originalBackTranslate = SpyFunction("original")
+		self.module = types.SimpleNamespace(
+			translate=self.originalTranslate,
+			backTranslate=self.originalBackTranslate,
+		)
+
+	def test_install_replaces_both_functions_with_bound_methods(self):
+		self.louisPatch.install(self.module)
+		self.assertIs(self.module.translate.__self__, self.louisPatch)
+		self.assertIs(self.module.backTranslate.__self__, self.louisPatch)
+
+	def test_uninstall_restores_both_functions_and_clears_the_cache(self):
+		self.louisPatch.install(self.module)
+		self.louisPatch.uninstall(self.module)
+		self.assertIs(self.module.translate, self.originalTranslate)
+		self.assertIs(self.module.backTranslate, self.originalBackTranslate)
+		self.assertEqual(self.cache.cleared, 1)
+
+	def test_double_install_raises(self):
+		self.louisPatch.install(self.module)
+		with self.assertRaises(RuntimeError):
+			self.louisPatch.install(self.module)
+
+	def test_install_over_another_patch_raises(self):
+		self.louisPatch.install(self.module)
+		with self.assertRaises(RuntimeError):
+			makePatch(FakeCache()).install(self.module)
+
+	def test_uninstall_leaves_a_foreign_replacement_alone_and_warns(self):
+		self.louisPatch.install(self.module)
+		foreign = SpyFunction(None)
+		self.module.translate = foreign
+		self.louisPatch.uninstall(self.module)
+		self.assertIs(self.module.translate, foreign)
+		self.assertIs(self.module.backTranslate, self.originalBackTranslate)
+		self.assertEqual(len(log.recordsAt("warning")), 1)
+
+	def test_uninstall_without_install_is_a_no_op(self):
+		self.louisPatch.uninstall(self.module)
+		self.assertIs(self.module.translate, self.originalTranslate)
+
+
+class TestInstalledTranslation(PatchTestCase):
+	def test_calls_through_the_module_reach_louis_rs(self):
+		self.louisPatch._original = None
+		module = types.SimpleNamespace(
+			translate=self.originalTranslate,
+			backTranslate=self.originalBackTranslate,
+		)
+		self.louisPatch.install(module)
+		self.assertEqual(module.translate(["mini.ctb"], "abc")[0], [1, 3, 9])
+		self.assertEqual(module.backTranslate(["mini.ctb"], [1, 3]), "ab")
+		self.assertEqual(self.originalTranslate.calls, [])
