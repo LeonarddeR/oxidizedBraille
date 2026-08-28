@@ -11,7 +11,8 @@ from typing import Any, TypeVar
 
 from logHandler import log
 
-from . import louis_py
+from . import louis_py, translator
+from .cells import mapFlags, typeformToEmphasis
 from .translator import TranslatorCache, isRecoverable
 
 T = TypeVar("T")
@@ -80,6 +81,34 @@ class LouisHelperPatch:
 		log.exception(
 			f"louis-rs {direction} translation with {list(tables)} failed; "
 			"falling back to liblouis for this call",
+		)
+
+	@property
+	def _originalTranslate(self) -> Callable[..., Any]:
+		if self._original is None:
+			raise RuntimeError("The patch is not installed")
+		return self._original[0]
+
+	def translate(
+		self,
+		tableList: list[str],
+		inbuf: str,
+		typeform: Sequence[int] | None = None,
+		cursorPos: int | None = None,
+		mode: int = 0,
+	) -> tuple[list[int], list[int], list[int], int | None]:
+		text = inbuf.replace("\0", "")
+		return self._run(
+			tableList,
+			False,
+			work=lambda compiled: translator.translateText(
+				compiled,
+				text,
+				mode=mapFlags(mode, self._modeMap),
+				emphasis=typeformToEmphasis(typeform, self._typeformClasses, len(text)),
+				cursorPos=cursorPos,
+			),
+			fallback=lambda: self._originalTranslate(tableList, inbuf, typeform, cursorPos, mode),
 		)
 
 	def clearCache(self) -> None:

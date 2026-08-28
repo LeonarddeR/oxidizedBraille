@@ -12,6 +12,8 @@ from typing import Any
 from globalPlugins.oxidizedBraille import louis_py, patch
 from logHandler import log
 
+from tests._stubs import SpyFunction
+
 MODE_MAP = {
 	2: int(louis_py.TranslationMode.COMPBRL_AT_CURSOR),
 	256: int(louis_py.TranslationMode.PARTIAL_TRANS),
@@ -132,3 +134,64 @@ class TestFallback(unittest.TestCase):
 		louisPatch._run(["a.ctb"], False, work, fallback)
 		self.assertEqual(len(cache.calls), 2)
 		self.assertEqual(cache.cleared, 1)
+
+
+class TestTranslate(unittest.TestCase):
+	def setUp(self):
+		import louisHelper
+		from globalPlugins.oxidizedBraille import translator
+
+		from tests import TABLES_DIR
+
+		log.records.clear()
+		self.originalTranslate = SpyFunction(("original",))
+		self.originalBackTranslate = SpyFunction("original")
+		self.louisPatch = patch.LouisHelperPatch(
+			cache=translator.TranslatorCache(),
+			resolveTables=lambda tables: tuple(louisHelper._resolveTableInner(tables)),
+			getSearchDirs=lambda tables: translator.buildSearchDirs(tables, [], str(TABLES_DIR)),
+			modeMap=MODE_MAP,
+			typeformClasses=CLASSES,
+		)
+		self.louisPatch._original = (self.originalTranslate, self.originalBackTranslate)
+		self.translator = translator
+
+	def test_returns_louis_rs_cells_without_calling_the_original(self):
+		self.assertEqual(
+			self.louisPatch.translate(["mini.ctb"], "abc"),
+			([1, 3, 9], [0, 1, 2], [0, 1, 2], None),
+		)
+		self.assertEqual(self.originalTranslate.calls, [])
+
+	def test_cursor_is_translated(self):
+		self.assertEqual(self.louisPatch.translate(["mini.ctb"], "abc", cursorPos=1)[3], 1)
+
+	def test_null_characters_are_stripped_before_translation(self):
+		cells, brailleToRawPos, rawToBraillePos, _ = self.louisPatch.translate(["mini.ctb"], "a\0b")
+		self.assertEqual(cells, [1, 3])
+		self.assertEqual(rawToBraillePos, [0, 1])
+
+	def test_typeform_length_mismatch_does_not_raise(self):
+		self.assertEqual(self.louisPatch.translate(["mini.ctb"], "abc", typeform=[1])[0], [1, 3, 9])
+
+	def test_mode_and_typeform_are_mapped_for_louis_rs(self):
+		spy = SpyFunction(([], [], [], None))
+		self.addCleanup(setattr, self.translator, "translateText", self.translator.translateText)
+		self.translator.translateText = spy
+		self.louisPatch.translate(["mini.ctb"], "abc", typeform=[1, 0, 0], mode=2)
+		kwargs = spy.calls[0][1]
+		self.assertEqual(kwargs["mode"], int(louis_py.TranslationMode.COMPBRL_AT_CURSOR))
+		self.assertEqual(kwargs["emphasis"], [("italic", 0, 1)])
+
+	def test_broken_table_falls_back_with_untouched_arguments(self):
+		result = self.louisPatch.translate(["broken.ctb"], "a\0b", typeform=None, cursorPos=1, mode=2)
+		self.assertEqual(result, ("original",))
+		self.assertEqual(self.originalTranslate.calls, [((["broken.ctb"], "a\0b", None, 1, 2), {})])
+
+	def test_position_error_falls_back(self):
+		def failing(*args: Any, **kwargs: Any) -> Any:
+			raise self.translator.PositionError("mismatch")
+
+		self.addCleanup(setattr, self.translator, "translateText", self.translator.translateText)
+		self.translator.translateText = failing
+		self.assertEqual(self.louisPatch.translate(["mini.ctb"], "abc"), ("original",))
