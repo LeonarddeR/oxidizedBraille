@@ -29,7 +29,7 @@ From the NVDA Python console (NVDA+control+Z) you can compare both engines direc
 import louisHelper
 tables = ["en-ueb-g2.ctb", "braille-patterns.cti"]
 louisHelper.translate(tables, "Hello world", cursorPos=3)
-louisHelper.translate.__self__._original[0](tables, "Hello world", cursorPos=3)
+louisHelper.translate.__self__._originals["translate"](tables, "Hello world", cursorPos=3)
 ```
 
 The first call uses louis-rs, the second the original liblouis function.
