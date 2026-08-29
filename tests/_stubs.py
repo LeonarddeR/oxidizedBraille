@@ -12,6 +12,7 @@ Table names resolve against ``tests/tables``.
 from __future__ import annotations
 
 import enum
+import inspect
 import sys
 import types
 from collections.abc import Callable, Generator
@@ -67,8 +68,13 @@ class FakeAction:
 		self.handlers.remove(handler)
 
 	def notify(self, **kwargs: Any):
+		"""Calls every handler with only the keyword arguments its signature accepts, like NVDA does."""
 		for handler in list(self.handlers):
-			handler(**kwargs)
+			parameters = inspect.signature(handler).parameters
+			if any(parameter.kind == parameter.VAR_KEYWORD for parameter in parameters.values()):
+				handler(**kwargs)
+			else:
+				handler(**{name: value for name, value in kwargs.items() if name in parameters})
 
 
 def _module(name: str) -> types.ModuleType:

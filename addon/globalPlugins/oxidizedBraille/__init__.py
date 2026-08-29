@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
 
 import addonHandler
 import brailleTables
@@ -44,7 +43,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			f"now use louis-rs (louis_py {louis_py.__version__})",
 		)
 
-	def _onConfigReset(self, **_kwargs: Any) -> None:
+	def _onConfigReset(self) -> None:
 		if self._patch is not None:
 			self._patch.clearCache()
 
