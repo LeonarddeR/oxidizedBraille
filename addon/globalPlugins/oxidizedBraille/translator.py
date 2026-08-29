@@ -2,7 +2,7 @@
 # Copyright 2026 Leonard de Ruijter <alderuijter@gmail.com>
 # License: GNU General Public License version 2.0 or later
 
-"""Locates braille tables for louis-rs and caches compiled translators."""
+"""Compiles louis-rs translators for NVDA's tables, caches them and shapes their results."""
 
 from __future__ import annotations
 
@@ -10,33 +10,33 @@ import os
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 
 from logHandler import log
 
 from . import louis_py
-from .cells import cellsToUnicode, isUnicodeBraille, normalizeCursor, stripUnicodeBraille, unicodeToCells
+from .cells import (
+	UNDEFINED_CELL,
+	cellsToUnicode,
+	isUnicodeBraille,
+	normalizeCursor,
+	stripUnicodeBraille,
+	unicodeToCells,
+)
 
 TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
 """Environment variable louis-rs reads to locate tables and their includes."""
 
-TranslatorKey = tuple[tuple[str, ...], tuple[str, ...], bool]
+TableKey = tuple[tuple[str, ...], bool]
+"""Table names as NVDA passes them, plus whether the direction is backward."""
+
+CompileFunction = Callable[[Sequence[str], bool], louis_py.Translator]
 
 
-def buildSearchDirs(
-	tables: Sequence[str],
-	customDirs: Sequence[str],
-	builtinDir: str,
-) -> tuple[str, ...]:
-	"""Directories to search for includes: next to each table, then custom dirs, then the built-in dir."""
-	dirs: dict[str, None] = {}
-	for table in tables:
-		dirs.setdefault(os.path.dirname(table), None)
-	for directory in customDirs:
-		dirs.setdefault(directory, None)
-	dirs.setdefault(builtinDir, None)
-	return tuple(dirs)
+def buildSearchDirs(tables: Sequence[str], builtinDir: str) -> tuple[str, ...]:
+	"""Directories louis-rs may find includes in: next to each table, then the built-in table directory."""
+	return tuple(dict.fromkeys([*(os.path.dirname(table) for table in tables), builtinDir]))
 
 
 @contextmanager
@@ -55,36 +55,55 @@ def tablePath(dirs: Sequence[str]) -> Iterator[None]:
 			os.environ[TABLE_PATH_VARIABLE] = previous
 
 
-class TranslatorCache:
-	"""Least-recently-used cache of compiled translators, keyed by tables, search dirs and direction."""
+def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) -> louis_py.Translator:
+	"""Compile absolute table paths, resolving their includes the way NVDA's own resolver does."""
+	direction = louis_py.Direction.BACKWARD if backward else louis_py.Direction.FORWARD
+	with tablePath(buildSearchDirs(tables, builtinDir)):
+		return louis_py.Translator(list(tables), direction)
 
-	def __init__(self, maxSize: int = 8):
+
+class TranslatorCache:
+	"""Least-recently-used cache of translators by table names and direction.
+
+	A table list that failed to compile stays failed until :meth:`clear`; asking for it again
+	raises the failure without compiling again.
+	"""
+
+	def __init__(self, compile: CompileFunction, maxSize: int = 8):
+		self._compile = compile
 		self._maxSize = maxSize
-		self._entries: OrderedDict[TranslatorKey, louis_py.Translator] = OrderedDict()
+		self._entries: OrderedDict[TableKey, louis_py.Translator | Exception] = OrderedDict()
 		self._lock = threading.Lock()
 
 	def __len__(self) -> int:
 		return len(self._entries)
 
-	def get(self, tables: Sequence[str], searchDirs: Sequence[str], backward: bool) -> louis_py.Translator:
-		key: TranslatorKey = (tuple(tables), tuple(searchDirs), backward)
+	def get(self, tableList: Sequence[str], backward: bool) -> louis_py.Translator:
+		key: TableKey = (tuple(tableList), backward)
 		with self._lock:
-			cached = self._entries.get(key)
-			if cached is not None:
+			entry = self._entries.get(key)
+			if entry is None:
+				entry = self._compileEntry(tableList, backward)
+				self._entries[key] = entry
+				while len(self._entries) > self._maxSize:
+					self._entries.popitem(last=False)
+			else:
 				self._entries.move_to_end(key)
-				return cached
-			direction = louis_py.Direction.BACKWARD if backward else louis_py.Direction.FORWARD
-			started = time.perf_counter()
-			with tablePath(searchDirs):
-				compiled = louis_py.Translator(list(tables), direction)
-			self._entries[key] = compiled
-			while len(self._entries) > self._maxSize:
-				self._entries.popitem(last=False)
-			log.debug(
-				f"Compiled {'backward' if backward else 'forward'} translator for {tables} "
-				f"in {time.perf_counter() - started:.3f} s",
-			)
-			return compiled
+		if isinstance(entry, Exception):
+			raise entry.with_traceback(None)
+		return entry
+
+	def _compileEntry(self, tableList: Sequence[str], backward: bool) -> louis_py.Translator | Exception:
+		started = time.perf_counter()
+		try:
+			compiled = self._compile(tableList, backward)
+		except (louis_py.LouisError, LookupError) as exc:
+			return exc
+		direction = "backward" if backward else "forward"
+		log.debug(
+			f"Compiled {direction} translator for {list(tableList)} in {time.perf_counter() - started:.3f} s",
+		)
+		return compiled
 
 	def clear(self) -> None:
 		with self._lock:
@@ -108,7 +127,7 @@ def translateText(
 	text: str,
 	*,
 	mode: int,
-	emphasis: Sequence[tuple[str, int, int]],
+	emphasis: Sequence[louis_py.EmphasisSpan],
 	cursorPos: int | None,
 ) -> tuple[list[int], list[int], list[int], int | None]:
 	"""Translate ``text`` and shape the result like ``louisHelper.translate`` does."""
@@ -118,13 +137,13 @@ def translateText(
 		emphasis=list(emphasis) or None,
 		cursor_pos=normalizeCursor(cursorPos, len(text)),
 	)
-	output = result.output
-	cells = unicodeToCells(output)
-	nonBraille = [f"U+{ord(char):04X}" for char in output if not isUnicodeBraille(char)]
-	if nonBraille:
-		log.debug(
-			f"louis-rs produced characters outside the braille block, shown as full cells: {nonBraille}",
-		)
+	cells = unicodeToCells(result.output)
+	if UNDEFINED_CELL in cells:
+		nonBraille = [f"U+{ord(char):04X}" for char in result.output if not isUnicodeBraille(char)]
+		if nonBraille:
+			log.debug(
+				f"louis-rs produced characters outside the braille block, shown as full cells: {nonBraille}",
+			)
 	brailleToRawPos = list(result.input_positions or [])
 	rawToBraillePos = list(result.output_positions or [])
 	if len(brailleToRawPos) != len(cells) or len(rawToBraillePos) != len(text):
@@ -132,13 +151,7 @@ def translateText(
 			f"Position lists do not match: {len(brailleToRawPos)} entries for {len(cells)} cells, "
 			f"{len(rawToBraillePos)} entries for {len(text)} characters",
 		)
-	if cursorPos is None:
-		brailleCursorPos = None
-	elif result.cursor_pos is None:
-		brailleCursorPos = min(max(cursorPos, 0), len(cells))
-	else:
-		brailleCursorPos = result.cursor_pos
-	return cells, brailleToRawPos, rawToBraillePos, brailleCursorPos
+	return cells, brailleToRawPos, rawToBraillePos, result.cursor_pos
 
 
 def backTranslateCells(compiled: louis_py.Translator, cells: Sequence[int], *, mode: int) -> str:
@@ -147,7 +160,4 @@ def backTranslateCells(compiled: louis_py.Translator, cells: Sequence[int], *, m
 	louis-rs renders a cell it cannot back-translate as an escape made of braille characters,
 	so removing braille characters from the output leaves only the translated text.
 	"""
-	braille = cellsToUnicode(cells)
-	if not braille:
-		return ""
-	return stripUnicodeBraille(compiled.translate_with_options(braille, mode=mode).output)
+	return stripUnicodeBraille(compiled.translate_with_options(cellsToUnicode(cells), mode=mode).output)

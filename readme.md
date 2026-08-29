@@ -44,7 +44,7 @@ As a result:
 * Bold, italic and underline are not indicated in braille output.
 * Characters a table does not define are shown as a short `\x` escape rather than liblouis's `\xHHHH` form. Cells typed on a braille display that the input table does not define are dropped.
 * Routing and cursor positions may differ from liblouis in contracted tables.
-* Tables included by custom tables (from add-ons or the scratchpad) are looked up in the directory of the including table, then the scratchpad, add-on table directories and NVDA's built-in tables, rather than strictly next to the including table.
+* A table included by another table is looked up next to the tables selected for translation and among NVDA's built-in tables. This differs from liblouis only when a table includes another table from a third directory.
 
 The add-on only works on 64-bit Windows.
 Restart NVDA after updating the add-on.

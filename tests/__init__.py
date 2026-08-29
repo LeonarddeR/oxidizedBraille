@@ -17,12 +17,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ADDON_DIR = REPO_ROOT / "addon"
-TABLES_DIR = REPO_ROOT / "tests" / "tables"
+from ._stubs import TABLES_DIR, install
 
-sys.path.insert(0, str(ADDON_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "addon"))
+install()
 
-from . import _stubs  # noqa: E402
-
-_stubs.install()
+__all__ = ["TABLES_DIR"]

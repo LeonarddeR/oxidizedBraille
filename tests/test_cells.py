@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import unittest
 
+import louisHelper
 from globalPlugins.oxidizedBraille import cells
 
 CLASSES = {1: "italic", 4: "bold", 2: "underline"}
@@ -92,8 +93,22 @@ class TestTypeformToEmphasis(unittest.TestCase):
 			[("italic", 0, 2), ("bold", 0, 2)],
 		)
 
+	def test_class_run_continues_across_a_change_of_other_flags(self):
+		self.assertEqual(
+			cells.typeformToEmphasis([1, 5, 1], CLASSES, 3),
+			[("bold", 1, 2), ("italic", 0, 3)],
+		)
+
 	def test_shorter_typeform_is_padded_with_plain(self):
 		self.assertEqual(cells.typeformToEmphasis([1], CLASSES, 3), [("italic", 0, 1)])
 
 	def test_longer_typeform_is_truncated_to_length(self):
 		self.assertEqual(cells.typeformToEmphasis([1, 1, 1, 1], CLASSES, 2), [("italic", 0, 2)])
+
+	def test_int_flag_members_are_accepted(self):
+		typeform = [louisHelper.Typeform.ITALIC, louisHelper.Typeform.PLAIN_TEXT]
+		self.assertEqual(cells.typeformToEmphasis(typeform, CLASSES, 2), [("italic", 0, 1)])
+
+	def test_spans_are_emphasis_spans(self):
+		(span,) = cells.typeformToEmphasis([1], CLASSES, 1)
+		self.assertEqual((span.class_, span.start, span.end), ("italic", 0, 1))

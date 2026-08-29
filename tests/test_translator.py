@@ -2,18 +2,22 @@
 # Copyright 2026 Leonard de Ruijter <alderuijter@gmail.com>
 # License: GNU General Public License version 2.0 or later
 
-"""Tests for table lookup and translator caching in ``translator``."""
+"""Tests for table lookup, translator caching and result shaping in ``translator``."""
 
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
+from unittest import mock
 
 from globalPlugins.oxidizedBraille import louis_py, translator
 from logHandler import log
 
 from tests import TABLES_DIR
+from tests._stubs import PanicException
 
 TABLES = str(TABLES_DIR)
 MINI = str(TABLES_DIR / "mini.ctb")
@@ -23,30 +27,20 @@ BOGUS_DIR = "C:/does-not-exist"
 
 
 class TestBuildSearchDirs(unittest.TestCase):
-	def test_table_dirs_come_first_then_custom_then_builtin(self):
+	def test_table_dirs_come_first_then_builtin(self):
 		self.assertEqual(
-			translator.buildSearchDirs(["C:/a/x.ctb", "C:/b/y.ctb"], ["C:/custom"], "C:/builtin"),
-			("C:/a", "C:/b", "C:/custom", "C:/builtin"),
+			translator.buildSearchDirs(["C:/a/x.ctb", "C:/b/y.ctb"], "C:/builtin"),
+			("C:/a", "C:/b", "C:/builtin"),
 		)
 
 	def test_duplicates_are_removed_keeping_the_first(self):
-		self.assertEqual(
-			translator.buildSearchDirs(["C:/builtin/x.ctb"], ["C:/builtin"], "C:/builtin"),
-			("C:/builtin",),
-		)
-
-	def test_result_is_never_empty(self):
-		self.assertEqual(translator.buildSearchDirs([], [], "C:/builtin"), ("C:/builtin",))
+		self.assertEqual(translator.buildSearchDirs(["C:/builtin/x.ctb"], "C:/builtin"), ("C:/builtin",))
 
 
 class TestTablePath(unittest.TestCase):
 	def setUp(self):
-		self.previous = os.environ.pop(translator.TABLE_PATH_VARIABLE, None)
-
-	def tearDown(self):
+		self.enterContext(mock.patch.dict(os.environ))
 		os.environ.pop(translator.TABLE_PATH_VARIABLE, None)
-		if self.previous is not None:
-			os.environ[translator.TABLE_PATH_VARIABLE] = self.previous
 
 	def test_sets_variable_to_joined_dirs(self):
 		with translator.tablePath(["C:/a", "C:/b"]):
@@ -72,62 +66,101 @@ class TestTablePath(unittest.TestCase):
 			self.assertEqual(louis_py.Translator([MINI]).translate("a"), "\u2801")
 
 
-class TestTranslatorCache(unittest.TestCase):
-	def setUp(self):
-		self.cache = translator.TranslatorCache(maxSize=2)
-		log.records.clear()
+class TestCompileTranslator(unittest.TestCase):
+	def test_compiles_forward_and_backward(self):
+		forward = translator.compileTranslator([MINI], False, BOGUS_DIR)
+		backward = translator.compileTranslator([MINI], True, BOGUS_DIR)
+		self.assertEqual(forward.translate("ab"), "\u2801\u2803")
+		self.assertEqual(backward.translate("\u2801\u2803"), "ab")
 
-	def test_same_key_returns_same_object(self):
-		first = self.cache.get([MINI], [TABLES], backward=False)
-		second = self.cache.get([MINI], [TABLES], backward=False)
-		self.assertIs(first, second)
-
-	def test_backward_gives_different_object(self):
-		forward = self.cache.get([MINI], [TABLES], backward=False)
-		backward = self.cache.get([MINI], [TABLES], backward=True)
-		self.assertIsNot(forward, backward)
-		self.assertEqual(backward.translate("\u2801"), "a")
-
-	def test_different_search_dirs_give_different_object(self):
-		first = self.cache.get([MINI], [TABLES], backward=False)
-		second = self.cache.get([MINI], [BOGUS_DIR, TABLES], backward=False)
-		self.assertIsNot(first, second)
-
-	def test_oldest_entry_is_evicted_beyond_max_size(self):
-		first = self.cache.get([MINI], [TABLES], backward=False)
-		self.cache.get([MINI], [TABLES], backward=True)
-		self.cache.get([INCLUDE], [TABLES], backward=False)
-		self.assertEqual(len(self.cache), 2)
-		self.assertIsNot(self.cache.get([MINI], [TABLES], backward=False), first)
-
-	def test_clear_drops_entries(self):
-		first = self.cache.get([MINI], [TABLES], backward=False)
-		self.cache.clear()
-		self.assertEqual(len(self.cache), 0)
-		self.assertIsNot(self.cache.get([MINI], [TABLES], backward=False), first)
-
-	def test_include_compiles_when_its_dir_is_searched(self):
-		including = self.cache.get([INCLUDE], [TABLES], backward=False)
+	def test_include_next_to_the_table_resolves_without_builtin_dir(self):
+		including = translator.compileTranslator([INCLUDE], False, BOGUS_DIR)
 		self.assertEqual(including.translate("a."), "\u2801\u2832")
 
-	def test_include_fails_without_its_dir(self):
-		with self.assertRaises(louis_py.TableParseError):
-			self.cache.get([INCLUDE], [BOGUS_DIR], backward=False)
+	def test_include_from_builtin_dir_resolves_only_when_given(self):
+		with tempfile.TemporaryDirectory() as directory:
+			table = Path(directory) / "custom.ctb"
+			table.write_text("include mini.ctb\n", encoding="utf-8")
+			self.assertEqual(
+				translator.compileTranslator([str(table)], False, TABLES).translate("a"),
+				"\u2801",
+			)
+			with self.assertRaises(louis_py.TableParseError):
+				translator.compileTranslator([str(table)], False, BOGUS_DIR)
 
 	def test_broken_table_raises_with_errors(self):
 		with self.assertRaises(louis_py.TableParseError) as context:
-			self.cache.get([BROKEN], [TABLES], backward=False)
+			translator.compileTranslator([BROKEN], False, TABLES)
 		self.assertTrue(context.exception.errors)
 
-	def test_failed_compile_is_not_cached(self):
-		with self.assertRaises(louis_py.TableParseError):
-			self.cache.get([BROKEN], [TABLES], backward=False)
+
+class TestTranslatorCache(unittest.TestCase):
+	def setUp(self):
+		log.records.clear()
+		self.compile = mock.Mock(side_effect=self.compileTable)
+		self.cache = translator.TranslatorCache(self.compile, maxSize=2)
+
+	@staticmethod
+	def compileTable(tableList: list[str], backward: bool) -> louis_py.Translator:
+		return translator.compileTranslator([str(TABLES_DIR / name) for name in tableList], backward, TABLES)
+
+	def test_same_key_returns_same_object_without_recompiling(self):
+		first = self.cache.get(["mini.ctb"], backward=False)
+		self.assertIs(self.cache.get(["mini.ctb"], backward=False), first)
+		self.assertEqual(self.compile.call_count, 1)
+
+	def test_backward_gives_different_object(self):
+		forward = self.cache.get(["mini.ctb"], backward=False)
+		backward = self.cache.get(["mini.ctb"], backward=True)
+		self.assertIsNot(forward, backward)
+		self.assertEqual(backward.translate("\u2801"), "a")
+
+	def test_oldest_entry_is_evicted_beyond_max_size(self):
+		first = self.cache.get(["mini.ctb"], backward=False)
+		self.cache.get(["mini.ctb"], backward=True)
+		self.cache.get(["include.ctb"], backward=False)
+		self.assertEqual(len(self.cache), 2)
+		self.assertIsNot(self.cache.get(["mini.ctb"], backward=False), first)
+
+	def test_clear_drops_entries(self):
+		first = self.cache.get(["mini.ctb"], backward=False)
+		self.cache.clear()
 		self.assertEqual(len(self.cache), 0)
+		self.assertIsNot(self.cache.get(["mini.ctb"], backward=False), first)
+
+	def test_failed_compile_is_raised_again_without_recompiling(self):
+		for _ in range(2):
+			with self.assertRaises(louis_py.TableParseError) as context:
+				self.cache.get(["broken.ctb"], backward=False)
+			self.assertTrue(context.exception.errors)
+		self.assertEqual(self.compile.call_count, 1)
+
+	def test_unresolvable_table_is_cached_as_failure(self):
+		self.compile.side_effect = LookupError("no such table")
+		for _ in range(2):
+			with self.assertRaises(LookupError):
+				self.cache.get(["missing.ctb"], backward=False)
+		self.assertEqual(self.compile.call_count, 1)
+
+	def test_clear_forgets_failures(self):
+		with self.assertRaises(louis_py.TableParseError):
+			self.cache.get(["broken.ctb"], backward=False)
+		self.cache.clear()
+		with self.assertRaises(louis_py.TableParseError):
+			self.cache.get(["broken.ctb"], backward=False)
+		self.assertEqual(self.compile.call_count, 2)
+
+	def test_unexpected_error_propagates_and_is_not_cached(self):
+		self.compile.side_effect = RuntimeError("boom")
+		for _ in range(2):
+			with self.assertRaises(RuntimeError):
+				self.cache.get(["mini.ctb"], backward=False)
+		self.assertEqual(self.compile.call_count, 2)
 
 	def test_compile_is_logged_at_debug_only_on_a_miss(self):
-		self.cache.get([MINI], [TABLES], backward=False)
+		self.cache.get(["mini.ctb"], backward=False)
 		self.assertEqual(len(log.recordsAt("debug")), 1)
-		self.cache.get([MINI], [TABLES], backward=False)
+		self.cache.get(["mini.ctb"], backward=False)
 		self.assertEqual(len(log.recordsAt("debug")), 1)
 
 
@@ -136,9 +169,6 @@ class TestIsRecoverable(unittest.TestCase):
 		self.assertTrue(translator.isRecoverable(ValueError("x")))
 
 	def test_rust_panic_is_recoverable(self):
-		class PanicException(BaseException):
-			pass
-
 		self.assertTrue(translator.isRecoverable(PanicException("boom")))
 
 	def test_keyboard_interrupt_is_not_recoverable(self):
@@ -153,19 +183,14 @@ class FakeResult:
 	cursor_pos: int | None
 
 
-class FakeTranslator:
-	def __init__(self, result: FakeResult):
-		self.result = result
-
-	def translate_with_options(self, text: str, **kwargs: object) -> FakeResult:
-		return self.result
+def fakeTranslator(result: FakeResult) -> mock.Mock:
+	return mock.Mock(**{"translate_with_options.return_value": result})
 
 
 class TestTranslateText(unittest.TestCase):
 	def setUp(self):
 		log.records.clear()
-		with translator.tablePath([TABLES]):
-			self.mini = louis_py.Translator([MINI])
+		self.mini = translator.compileTranslator([MINI], False, TABLES)
 
 	def translate(self, text: str, cursorPos: int | None = None):
 		return translator.translateText(self.mini, text, mode=0, emphasis=[], cursorPos=cursorPos)
@@ -192,7 +217,7 @@ class TestTranslateText(unittest.TestCase):
 		self.assertEqual(len(rawToBraillePos), 3)
 
 	def test_mismatched_position_lists_raise_position_error(self):
-		fake = FakeTranslator(FakeResult("\u2801\u2803", [0], [0, 1], None))
+		fake = fakeTranslator(FakeResult("\u2801\u2803", [0], [0, 1], None))
 		with self.assertRaises(translator.PositionError):
 			translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
 
@@ -200,7 +225,7 @@ class TestTranslateText(unittest.TestCase):
 		self.assertTrue(issubclass(translator.PositionError, louis_py.LouisError))
 
 	def test_non_braille_output_becomes_full_cells_and_is_logged(self):
-		fake = FakeTranslator(FakeResult("\u2801x", [0, 1], [0, 1], None))
+		fake = fakeTranslator(FakeResult("\u2801x", [0, 1], [0, 1], None))
 		cells, _, _, _ = translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
 		self.assertEqual(cells, [1, 0xFF])
 		self.assertEqual(len(log.recordsAt("debug")), 1)
@@ -208,8 +233,7 @@ class TestTranslateText(unittest.TestCase):
 
 class TestBackTranslateCells(unittest.TestCase):
 	def setUp(self):
-		with translator.tablePath([TABLES]):
-			self.mini = louis_py.Translator([MINI], louis_py.Direction.BACKWARD)
+		self.mini = translator.compileTranslator([MINI], True, TABLES)
 
 	def test_cells_are_back_translated(self):
 		self.assertEqual(translator.backTranslateCells(self.mini, [1, 3], mode=0), "ab")
@@ -220,9 +244,5 @@ class TestBackTranslateCells(unittest.TestCase):
 	def test_cells_are_masked_to_a_byte(self):
 		self.assertEqual(translator.backTranslateCells(self.mini, [0x101, 0x103], mode=0), "ab")
 
-	def test_no_cells_give_empty_string_without_translating(self):
-		class Untouchable:
-			def translate_with_options(self, *args: object, **kwargs: object) -> object:
-				raise AssertionError("must not be called")
-
-		self.assertEqual(translator.backTranslateCells(Untouchable(), [], mode=0), "")
+	def test_no_cells_give_empty_string(self):
+		self.assertEqual(translator.backTranslateCells(self.mini, [], mode=0), "")

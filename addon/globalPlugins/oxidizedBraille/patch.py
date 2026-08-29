@@ -6,41 +6,41 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
+import louisHelper
 from logHandler import log
 
 from . import louis_py, translator
 from .cells import mapFlags, typeformToEmphasis
-from .translator import TranslatorCache, isRecoverable
+from .translator import TableKey, TranslatorCache, isRecoverable
 
 T = TypeVar("T")
 
-BrokenKey = tuple[tuple[str, ...], bool]
-"""Table names as NVDA passes them, plus whether the direction is backward."""
+PATCHED_NAMES = ("translate", "backTranslate")
+
+MODE_MAP = {
+	int(louisHelper.TranslationMode.COMPBRL_AT_CURSOR): int(louis_py.TranslationMode.COMPBRL_AT_CURSOR),
+	int(louisHelper.TranslationMode.PARTIAL_TRANS): int(louis_py.TranslationMode.PARTIAL_TRANS),
+}
+"""NVDA translation mode bits and the louis-rs mode bits they map to."""
+
+TYPEFORM_CLASSES = {
+	int(louisHelper.Typeform.ITALIC): "italic",
+	int(louisHelper.Typeform.BOLD): "bold",
+	int(louisHelper.Typeform.UNDERLINE): "underline",
+}
+"""NVDA typeform bits and the louis-rs emphasis classes they map to."""
 
 
 class LouisHelperPatch:
 	"""Runs translations through louis-rs, falling back to the original liblouis functions on failure."""
 
-	def __init__(
-		self,
-		*,
-		cache: TranslatorCache,
-		resolveTables: Callable[[list[str]], Sequence[str]],
-		getSearchDirs: Callable[[Sequence[str]], Sequence[str]],
-		modeMap: Mapping[int, int],
-		typeformClasses: Mapping[int, str],
-	):
+	def __init__(self, cache: TranslatorCache):
 		self._cache = cache
-		self._resolveTables = resolveTables
-		self._getSearchDirs = getSearchDirs
-		self._modeMap = dict(modeMap)
-		self._typeformClasses = dict(typeformClasses)
-		self._original: tuple[Callable[..., Any], Callable[..., Any]] | None = None
-		self._broken: dict[BrokenKey, str] = {}
-		self._reported: set[BrokenKey] = set()
+		self._originals: dict[str, Callable[..., Any]] = {}
+		self._reported: set[TableKey] = set()
 
 	def _run(
 		self,
@@ -49,45 +49,33 @@ class LouisHelperPatch:
 		work: Callable[[louis_py.Translator], T],
 		fallback: Callable[[], T],
 	) -> T:
-		key: BrokenKey = (tuple(tableList), backward)
-		if key in self._broken:
-			return fallback()
 		try:
-			tables = tuple(self._resolveTables(list(tableList)))
-			compiled = self._cache.get(tables, self._getSearchDirs(tables), backward)
-			return work(compiled)
+			return work(self._cache.get(tableList, backward))
 		except BaseException as exc:
 			if not isRecoverable(exc):
 				raise
-			self._handleFailure(key, exc)
+			self._report((tuple(tableList), backward), exc)
 			return fallback()
 
-	def _handleFailure(self, key: BrokenKey, exc: BaseException) -> None:
+	def _report(self, key: TableKey, exc: BaseException) -> None:
+		"""Log a failure once per table list and direction."""
+		if key in self._reported:
+			return
+		self._reported.add(key)
 		tables, backward = key
 		direction = "backward" if backward else "forward"
 		if isinstance(exc, louis_py.TableParseError | LookupError):
-			self._broken[key] = str(exc)
 			details = getattr(exc, "errors", None)
 			suffix = f": {'; '.join(details)}" if details else ""
 			log.error(
 				f"louis-rs cannot use tables {list(tables)} for {direction} translation; "
 				f"falling back to liblouis for them until the next configuration reset. {exc}{suffix}",
 			)
-			return
-		if key in self._reported:
-			log.debug(f"louis-rs {direction} translation with {list(tables)} failed again: {exc!r}")
-			return
-		self._reported.add(key)
-		log.exception(
-			f"louis-rs {direction} translation with {list(tables)} failed; "
-			"falling back to liblouis for this call",
-		)
-
-	@property
-	def _originalTranslate(self) -> Callable[..., Any]:
-		if self._original is None:
-			raise RuntimeError("The patch is not installed")
-		return self._original[0]
+		else:
+			log.exception(
+				f"louis-rs {direction} translation with {list(tables)} failed; "
+				"falling back to liblouis for this call",
+			)
 
 	def translate(
 		self,
@@ -104,18 +92,12 @@ class LouisHelperPatch:
 			work=lambda compiled: translator.translateText(
 				compiled,
 				text,
-				mode=mapFlags(mode, self._modeMap),
-				emphasis=typeformToEmphasis(typeform, self._typeformClasses, len(text)),
+				mode=mapFlags(mode, MODE_MAP),
+				emphasis=typeformToEmphasis(typeform, TYPEFORM_CLASSES, len(text)),
 				cursorPos=cursorPos,
 			),
-			fallback=lambda: self._originalTranslate(tableList, inbuf, typeform, cursorPos, mode),
+			fallback=lambda: self._originals["translate"](tableList, inbuf, typeform, cursorPos, mode),
 		)
-
-	@property
-	def _originalBackTranslate(self) -> Callable[..., Any]:
-		if self._original is None:
-			raise RuntimeError("The patch is not installed")
-		return self._original[1]
 
 	def backTranslate(self, tableList: list[str], cells: list[int], mode: int = 0) -> str:
 		return self._run(
@@ -124,38 +106,36 @@ class LouisHelperPatch:
 			work=lambda compiled: translator.backTranslateCells(
 				compiled,
 				cells,
-				mode=mapFlags(mode, self._modeMap) | int(louis_py.TranslationMode.NO_UNDEFINED),
+				mode=mapFlags(mode, MODE_MAP) | int(louis_py.TranslationMode.NO_UNDEFINED),
 			),
-			fallback=lambda: self._originalBackTranslate(tableList, cells, mode),
+			fallback=lambda: self._originals["backTranslate"](tableList, cells, mode),
 		)
 
 	def install(self, module: Any) -> None:
 		"""Replace ``translate`` and ``backTranslate`` on the louisHelper module with this patch's methods."""
-		if self._original is not None:
+		if self._originals:
 			raise RuntimeError("The patch is already installed")
-		for name in ("translate", "backTranslate"):
-			if isinstance(getattr(getattr(module, name), "__self__", None), LouisHelperPatch):
-				raise RuntimeError(f"{name} is already patched by another instance")
-		self._original = (module.translate, module.backTranslate)
-		module.translate = self.translate
-		module.backTranslate = self.backTranslate
+		if any(
+			isinstance(getattr(getattr(module, name), "__self__", None), LouisHelperPatch)
+			for name in PATCHED_NAMES
+		):
+			raise RuntimeError("louisHelper is already patched by another instance")
+		self._originals = {name: getattr(module, name) for name in PATCHED_NAMES}
+		for name in PATCHED_NAMES:
+			setattr(module, name, getattr(self, name))
 
 	def uninstall(self, module: Any) -> None:
 		"""Restore the functions captured by :meth:`install`, unless someone else replaced them since."""
-		if self._original is None:
-			return
-		originals = zip(("translate", "backTranslate"), self._original, strict=True)
-		for name, original in originals:
+		for name, original in self._originals.items():
 			if getattr(getattr(module, name), "__self__", None) is self:
 				setattr(module, name, original)
 			else:
 				log.warning(
 					f"{name} was replaced by something else after this add-on patched it; leaving it alone",
 				)
-		self._original = None
+		self._originals = {}
 		self.clearCache()
 
 	def clearCache(self) -> None:
 		self._cache.clear()
-		self._broken.clear()
 		self._reported.clear()

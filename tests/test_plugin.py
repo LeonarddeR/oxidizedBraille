@@ -7,8 +7,8 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
-import brailleTables
 import config
 import louisHelper
 from globalPlugins import oxidizedBraille
@@ -16,7 +16,6 @@ from globalPlugins.oxidizedBraille import patch
 from logHandler import log
 
 from tests import TABLES_DIR
-from tests._stubs import SpyFunction
 
 
 class TestGlobalPlugin(unittest.TestCase):
@@ -46,25 +45,21 @@ class TestGlobalPlugin(unittest.TestCase):
 	def test_translation_through_louis_helper_uses_louis_rs(self):
 		self.assertEqual(louisHelper.translate(["mini.ctb"], "abc")[0], [1, 3, 9])
 		self.assertEqual(louisHelper.backTranslate(["mini.ctb"], [1, 3]), "ab")
-		self.assertEqual(self.originalTranslate.calls, [])
+		self.originalTranslate.assert_not_called()
 
 	def test_config_reset_clears_the_cache(self):
-		spy = SpyFunction(None)
-		self.plugin._patch.clearCache = spy
+		spy = self.enterContext(mock.patch.object(self.plugin._patch, "clearCache"))
 		config.post_configReset.notify(factoryDefaults=False)
-		self.assertEqual(len(spy.calls), 1)
+		spy.assert_called_once_with()
 
 
 class TestInstallFailure(unittest.TestCase):
 	def test_failed_install_leaves_louis_helper_untouched(self):
 		log.records.clear()
 		originalTranslate = louisHelper.translate
-
-		def failingInstall(self: patch.LouisHelperPatch, module: object) -> None:
-			raise RuntimeError("no patching today")
-
-		self.addCleanup(setattr, patch.LouisHelperPatch, "install", patch.LouisHelperPatch.install)
-		patch.LouisHelperPatch.install = failingInstall
+		self.enterContext(
+			mock.patch.object(patch.LouisHelperPatch, "install", side_effect=RuntimeError("no")),
+		)
 		plugin = oxidizedBraille.GlobalPlugin()
 		self.assertIs(louisHelper.translate, originalTranslate)
 		self.assertEqual(len(log.recordsAt("exception")), 1)
@@ -72,24 +67,20 @@ class TestInstallFailure(unittest.TestCase):
 		self.assertEqual(config.post_configReset.handlers, [])
 
 
-class TestSearchDirs(unittest.TestCase):
-	def setUp(self):
-		self.addCleanup(brailleTables._tablesDirs.maps[0].clear)
+class TestCompile(unittest.TestCase):
+	def test_resolves_names_like_nvda_and_compiles(self):
+		compiled = oxidizedBraille._compile(["mini.ctb"], False)
+		self.assertEqual(compiled.translate("abc"), "\u2801\u2803\u2809")
 
-	def test_custom_dirs_list_scratchpad_first_then_addons_skipping_missing(self):
-		testsDir = str(TABLES_DIR.parent)
-		brailleTables._tablesDirs["someAddon"] = testsDir
-		brailleTables._tablesDirs["missingAddon"] = "C:/does-not-exist"
-		brailleTables._tablesDirs[brailleTables.TableSource.SCRATCHPAD] = str(TABLES_DIR)
-		self.assertEqual(oxidizedBraille._customTableDirs(), [str(TABLES_DIR), testsDir])
+	def test_include_from_builtin_tables_resolves(self):
+		compiled = oxidizedBraille._compile(["include.ctb"], False)
+		self.assertEqual(compiled.translate("."), "\u2832")
 
-	def test_search_dirs_start_with_the_table_dir_and_end_with_builtin(self):
-		testsDir = str(TABLES_DIR.parent)
-		brailleTables._tablesDirs["someAddon"] = testsDir
-		self.assertEqual(
-			oxidizedBraille._getSearchDirs(("C:/tables/x.ctb",)),
-			("C:/tables", testsDir, str(TABLES_DIR)),
-		)
+	def test_unknown_table_raises_lookup_error(self):
+		with self.assertRaises(LookupError):
+			oxidizedBraille._compile(["missing.ctb"], False)
 
-	def test_resolve_tables_gives_absolute_paths(self):
-		self.assertEqual(oxidizedBraille._resolveTables(["mini.ctb"]), (str(TABLES_DIR / "mini.ctb"),))
+	def test_builtin_dir_is_nvdas_table_dir(self):
+		import brailleTables
+
+		self.assertEqual(brailleTables.TABLES_DIR, str(TABLES_DIR))

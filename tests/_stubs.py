@@ -11,40 +11,32 @@ Table names resolve against ``tests/tables``.
 
 from __future__ import annotations
 
-import collections
 import enum
-import os
 import sys
 import types
 from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 TABLES_DIR = Path(__file__).resolve().parent / "tables"
+
+
+class PanicException(BaseException):
+	"""Stands in for pyo3_runtime.PanicException, which the add-on recognises by name."""
 
 
 class FakeLogger:
 	"""Collects log records so tests can assert on them."""
 
-	DEBUG = 10
-	INFO = 20
-	WARNING = 30
-	ERROR = 40
-
 	def __init__(self):
 		self.records: list[tuple[str, str]] = []
-
-	def isEnabledFor(self, level: int) -> bool:
-		return True
 
 	def _log(self, level: str, msg: Any):
 		self.records.append((level, str(msg)))
 
 	def debug(self, msg: Any, *args: Any, **kwargs: Any):
 		self._log("debug", msg)
-
-	def debugWarning(self, msg: Any, *args: Any, **kwargs: Any):
-		self._log("debugWarning", msg)
 
 	def info(self, msg: Any, *args: Any, **kwargs: Any):
 		self._log("info", msg)
@@ -79,18 +71,6 @@ class FakeAction:
 			handler(**kwargs)
 
 
-class SpyFunction:
-	"""Callable that records its calls and returns a fixed value."""
-
-	def __init__(self, returnValue: Any):
-		self.returnValue = returnValue
-		self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-
-	def __call__(self, *args: Any, **kwargs: Any) -> Any:
-		self.calls.append((args, kwargs))
-		return self.returnValue
-
-
 def _module(name: str) -> types.ModuleType:
 	module = types.ModuleType(name)
 	sys.modules[name] = module
@@ -121,22 +101,9 @@ def _installLouisHelper() -> types.ModuleType:
 	louisHelper.Typeform = Typeform
 	louisHelper.TranslationMode = TranslationMode
 	louisHelper._resolveTableInner = _resolveTableInner
-	louisHelper.translate = SpyFunction(([], [], [], None))
-	louisHelper.backTranslate = SpyFunction("")
+	louisHelper.translate = Mock(return_value=([], [], [], None))
+	louisHelper.backTranslate = Mock(return_value="")
 	return louisHelper
-
-
-def _installBrailleTables() -> types.ModuleType:
-	brailleTables = _module("brailleTables")
-
-	class TableSource(enum.StrEnum):
-		BUILTIN = "builtin"
-		SCRATCHPAD = "scratchpad"
-
-	brailleTables.TableSource = TableSource
-	brailleTables.TABLES_DIR = str(TABLES_DIR)
-	brailleTables._tablesDirs = collections.ChainMap({TableSource.BUILTIN: str(TABLES_DIR)}).new_child()
-	return brailleTables
 
 
 def install():
@@ -161,16 +128,14 @@ def install():
 	addonHandler = _module("addonHandler")
 
 	class Addon:
-		name = "oxidizedBraille"
 		version = "0.0-test"
-		path = os.fspath(TABLES_DIR.parent.parent / "addon")
 
-	addonHandler.Addon = Addon
 	addonHandler.getCodeAddon = lambda: Addon()
 
 	config = _module("config")
-	config.conf = {"debugLog": {"louis": False}}
 	config.post_configReset = FakeAction()
 
+	brailleTables = _module("brailleTables")
+	brailleTables.TABLES_DIR = str(TABLES_DIR)
+
 	_installLouisHelper()
-	_installBrailleTables()

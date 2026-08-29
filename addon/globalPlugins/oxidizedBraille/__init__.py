@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Sequence
 from typing import Any
 
@@ -21,50 +20,18 @@ from . import louis_py, patch, translator
 
 addon = addonHandler.getCodeAddon()
 
-MODE_MAP = {
-	int(louisHelper.TranslationMode.COMPBRL_AT_CURSOR): int(louis_py.TranslationMode.COMPBRL_AT_CURSOR),
-	int(louisHelper.TranslationMode.PARTIAL_TRANS): int(louis_py.TranslationMode.PARTIAL_TRANS),
-}
-"""NVDA translation mode bits and the louis-rs mode bits they map to."""
 
-TYPEFORM_CLASSES = {
-	int(louisHelper.Typeform.ITALIC): "italic",
-	int(louisHelper.Typeform.BOLD): "bold",
-	int(louisHelper.Typeform.UNDERLINE): "underline",
-}
-"""NVDA typeform bits and the louis-rs emphasis classes they map to."""
-
-
-def _resolveTables(tableList: list[str]) -> tuple[str, ...]:
-	return tuple(louisHelper._resolveTableInner(tableList))
-
-
-def _customTableDirs() -> list[str]:
-	"""Scratchpad and add-on table directories NVDA knows about, scratchpad first, existing ones only."""
-	custom = brailleTables._tablesDirs.maps[0]
-	scratchpad = custom.get(brailleTables.TableSource.SCRATCHPAD)
-	ordered = [scratchpad] if scratchpad else []
-	ordered.extend(
-		directory for source, directory in custom.items() if source != brailleTables.TableSource.SCRATCHPAD
-	)
-	return [directory for directory in ordered if os.path.isdir(directory)]
-
-
-def _getSearchDirs(tables: Sequence[str]) -> tuple[str, ...]:
-	return translator.buildSearchDirs(tables, _customTableDirs(), brailleTables.TABLES_DIR)
+def _compile(tableList: Sequence[str], backward: bool) -> louis_py.Translator:
+	"""Resolve table names the way NVDA does, then compile them for louis-rs."""
+	tables = tuple(louisHelper._resolveTableInner(list(tableList)))
+	return translator.compileTranslator(tables, backward, brailleTables.TABLES_DIR)
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def __init__(self):
 		super().__init__()
 		self._patch: patch.LouisHelperPatch | None = None
-		louisPatch = patch.LouisHelperPatch(
-			cache=translator.TranslatorCache(),
-			resolveTables=_resolveTables,
-			getSearchDirs=_getSearchDirs,
-			modeMap=MODE_MAP,
-			typeformClasses=TYPEFORM_CLASSES,
-		)
+		louisPatch = patch.LouisHelperPatch(translator.TranslatorCache(_compile))
 		try:
 			louisPatch.install(louisHelper)
 		except Exception:
