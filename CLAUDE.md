@@ -43,7 +43,7 @@ Everything lives in one package, `addon/globalPlugins/oxidizedBraille/`:
 
 ## louis-rs constraints the code works around
 
-At the vendored revision louis-rs finds tables and `include` lines only through the `LOUIS_TABLE_PATH` environment variable (an empty value finds nothing, absolute paths work when it is set), does not apply translation modes or emphasis, and renders undefined cells in back-translation as braille-character escapes. See the readme's "Known gaps" before changing behaviour here; the proper fix for table lookup is a resolver API in louis-py.
+At the vendored revision louis-rs finds tables and `include` lines only through the `LOUIS_TABLE_PATH` environment variable (an empty value finds nothing, absolute paths work when it is set; liblouis/louis-rs#15 and #16, fixed by louis-rs PR #28 but not yet exposed by louis-py), does not apply translation modes (#19 `partialTrans`, #20 `compbrlAtCursor`) or emphasis, and renders undefined cells in back-translation as braille-character escapes (no issue filed). See the readme's "Known gaps" before changing behaviour here. The proper fix for table lookup is exposing the `SearchDirs` resolver of PR #28 through louis-py, which retires `tablePath`; honouring `NO_UNDEFINED` retires the braille stripping in `backTranslateCells`.
 
 ## Vendoring louis_py
 

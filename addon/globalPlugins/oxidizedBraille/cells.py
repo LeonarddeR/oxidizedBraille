@@ -77,13 +77,23 @@ def typeformToEmphasis(
 	classes: Mapping[int, str],
 	length: int,
 ) -> list[EmphasisSpan]:
-	"""Run-length encode per-character typeform flags into one span per uninterrupted run of a class.
+	"""Convert NVDA's per-character typeform flags into the emphasis spans louis-rs takes.
 
-	:param typeform: One flag value per character, or ``None`` for no formatting.
-		The flags are padded with plain text or truncated to ``length``.
-	:param classes: Typeform bits to the emphasis class names they stand for.
-	:param length: The length of the text the flags belong to.
-	:return: The emphasis spans, with end-exclusive character offsets.
+	NVDA describes formatting as one flag value per character, with a bit per kind of
+	formatting: ``[ITALIC, ITALIC | BOLD, ITALIC]`` means all three characters are italic and
+	the second one is also bold. louis-rs wants one span per stretch of characters sharing a
+	formatting class, as the class name plus start and end offsets, end exclusive. The example
+	becomes ``[("bold", 1, 2), ("italic", 0, 3)]``.
+
+	Every bit in ``classes`` is tracked on its own: a span opens at the first character that has
+	the bit and closes at the first later character without it, so a run of one class is not cut
+	by other bits coming and going inside it. Spans are listed in the order their runs end.
+
+	:param typeform: One flag value per character, or ``None`` for no formatting. Missing values
+		count as plain text, surplus values are ignored.
+	:param classes: Typeform bits and the louis-rs class name each one stands for.
+	:param length: The number of characters in the text; no span reaches past it.
+	:return: The emphasis spans, in the order their runs end.
 	"""
 	if typeform is None or not any(typeform):
 		return []

@@ -39,12 +39,12 @@ The first call uses louis-rs, the second the original liblouis function.
 The louis-rs revision in this release accepts, but does not yet apply, several liblouis translation modes.
 As a result:
 
-* "Expand the word at the cursor to computer braille" has no effect.
-* Contracted braille input is translated as if every buffered word were complete, so intermediate words may read differently than with liblouis.
+* "Expand the word at the cursor to computer braille" has no effect ([louis-rs#20](https://github.com/liblouis/louis-rs/issues/20)).
+* Contracted braille input is translated as if every buffered word were complete, so intermediate words may read differently than with liblouis ([louis-rs#19](https://github.com/liblouis/louis-rs/issues/19)).
 * Bold, italic and underline are not indicated in braille output.
 * Characters a table does not define are shown as a short `\x` escape rather than liblouis's `\xHHHH` form. Cells typed on a braille display that the input table does not define are dropped.
 * Routing and cursor positions may differ from liblouis in contracted tables.
-* A table included by another table is looked up next to the tables selected for translation and among NVDA's built-in tables. This differs from liblouis only when a table includes another table from a third directory.
+* A table included by another table is looked up next to the tables selected for translation and among NVDA's built-in tables. This differs from liblouis only when a table includes another table from a third directory ([louis-rs#15](https://github.com/liblouis/louis-rs/issues/15) and [#16](https://github.com/liblouis/louis-rs/issues/16), fixed by [louis-rs#28](https://github.com/liblouis/louis-rs/pull/28) but not yet available through louis-py).
 
 The add-on only works on 64-bit Windows.
 Restart NVDA after updating the add-on.
