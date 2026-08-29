@@ -27,13 +27,22 @@ TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
 
 
 def buildSearchDirs(tables: Sequence[str], builtinDir: str) -> tuple[str, ...]:
-	"""Directories louis-rs may find includes in: next to each table, then the built-in table directory."""
+	"""Directories louis-rs may find includes in: next to each table, then the built-in table directory.
+
+	:param tables: Absolute paths of the tables to compile.
+	:param builtinDir: NVDA's built-in table directory.
+	:return: The directories without duplicates, in lookup order.
+	"""
 	return tuple(dict.fromkeys([*(os.path.dirname(table) for table in tables), builtinDir]))
 
 
 @contextmanager
 def tablePath(dirs: Sequence[str]) -> Iterator[None]:
-	"""Point louis-rs at ``dirs`` while the block runs, then restore the previous value."""
+	"""Point louis-rs at ``dirs`` while the block runs, then restore the previous value.
+
+	:param dirs: The directories to set :data:`TABLE_PATH_VARIABLE` to.
+	:raises ValueError: If ``dirs`` is empty.
+	"""
 	if not dirs:
 		raise ValueError("At least one directory is required; louis-rs finds nothing on an empty path")
 	previous = os.environ.get(TABLE_PATH_VARIABLE)
@@ -48,7 +57,14 @@ def tablePath(dirs: Sequence[str]) -> Iterator[None]:
 
 
 def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) -> louis_py.Translator:
-	"""Compile absolute table paths, resolving their includes the way NVDA's own resolver does."""
+	"""Compile absolute table paths, resolving their includes the way NVDA's own resolver does.
+
+	:param tables: Absolute paths of the tables to compile.
+	:param backward: Whether the translator back-translates braille to text.
+	:param builtinDir: NVDA's built-in table directory.
+	:return: The compiled translator.
+	:raises louis_py.TableParseError: If louis-rs cannot compile the tables.
+	"""
 	direction = louis_py.Direction.BACKWARD if backward else louis_py.Direction.FORWARD
 	with tablePath(buildSearchDirs(tables, builtinDir)):
 		return louis_py.Translator(list(tables), direction)
@@ -58,6 +74,8 @@ def isRecoverable(exc: BaseException) -> bool:
 	"""Whether a failure inside louis-rs may be handled by falling back to liblouis.
 
 	Rust panics reach Python as ``pyo3_runtime.PanicException``, a ``BaseException`` subclass.
+
+	:param exc: The exception raised while compiling or translating.
 	"""
 	return isinstance(exc, Exception) or type(exc).__name__ == "PanicException"
 
@@ -74,7 +92,18 @@ def translateText(
 	emphasis: Sequence[louis_py.EmphasisSpan],
 	cursorPos: int | None,
 ) -> tuple[list[int], list[int], list[int], int | None]:
-	"""Translate ``text`` and shape the result like ``louisHelper.translate`` does."""
+	"""Translate ``text`` and shape the result like ``louisHelper.translate`` does.
+
+	:param compiled: A forward translator.
+	:param text: The text to translate.
+	:param mode: louis-rs translation mode bits.
+	:param emphasis: Emphasis spans for the formatted parts of ``text``.
+	:param cursorPos: The cursor position in ``text``, or ``None`` for no cursor.
+		A position outside the text is clamped to it.
+	:return: The cells, the input position of every cell, the cell position of every character,
+		and the cursor position in the cells, which is ``None`` when ``cursorPos`` is ``None``.
+	:raises PositionError: If the position lists louis-rs returned do not match the text or the cells.
+	"""
 	result = compiled.translate_with_options(
 		text,
 		mode=mode,
@@ -103,5 +132,10 @@ def backTranslateCells(compiled: louis_py.Translator, cells: Sequence[int], *, m
 
 	louis-rs renders a cell it cannot back-translate as an escape made of braille characters,
 	so removing braille characters from the output leaves only the translated text.
+
+	:param compiled: A backward translator.
+	:param cells: The braille cells to back-translate; every cell is masked to a byte.
+	:param mode: louis-rs translation mode bits.
+	:return: The back-translated text.
 	"""
 	return stripUnicodeBraille(compiled.translate_with_options(cellsToUnicode(cells), mode=mode).output)
