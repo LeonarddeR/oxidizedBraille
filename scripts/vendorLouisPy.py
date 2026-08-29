@@ -6,10 +6,10 @@ Usage: uv run python scripts/vendorLouisPy.py <path to louis_py-*-win_amd64.whl>
 from __future__ import annotations
 
 import datetime
-import re
 import shutil
 import subprocess
 import sys
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -20,9 +20,9 @@ SKIPPED_SUFFIXES = (".pdb", ".pyc")
 
 
 def louisRsRevision() -> str:
-	cargoToml = (LOUIS_PY_REPO / "Cargo.toml").read_text(encoding="utf-8")
-	match = re.search(r'louis-rs\s*=\s*\{[^}]*rev\s*=\s*"([0-9a-f]+)"', cargoToml)
-	return match.group(1) if match else "unknown"
+	with (LOUIS_PY_REPO / "Cargo.toml").open("rb") as cargoToml:
+		dependency = tomllib.load(cargoToml).get("dependencies", {}).get("louis-rs", {})
+	return dependency.get("rev", "unknown") if isinstance(dependency, dict) else "unknown"
 
 
 def louisPyCommit() -> str:

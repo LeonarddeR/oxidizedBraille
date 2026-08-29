@@ -3,6 +3,8 @@
 #:schema https://www.schemastore.org/prek.json
 
 default_language_version = { python = "python3.13" }
+# Vendored louis-py package: kept byte-identical to the wheel it came from.
+exclude = "^addon/globalPlugins/oxidizedBraille/louis_py/"
 
 [[repos]]
 repo = "meta"
@@ -23,11 +25,7 @@ hooks = [
       "master"
     ]
   },
-  {
-    id = "check-added-large-files",
-    # The vendored louis-py extension module is about 1.4 MB.
-    args = ["--maxkb=2048"]
-  },
+  { id = "check-added-large-files" },
   { id = "check-case-conflict" },
   { id = "check-merge-conflict" },
   {
@@ -87,10 +85,7 @@ hooks = [
 repo = "https://github.com/asottile/add-trailing-comma"
 rev = "v4.0.0"
 hooks = [
-  {
-    id = "add-trailing-comma",
-    exclude = "^addon/globalPlugins/oxidizedBraille/louis_py/"
-  }
+  { id = "add-trailing-comma" }
 ]
 
 [[repos]]
@@ -100,13 +95,11 @@ hooks = [
   {
     id = "ruff",
     name = "lint with ruff",
-    args = ["--fix"],
-    exclude = "^addon/globalPlugins/oxidizedBraille/louis_py/"
+    args = ["--fix"]
   },
   {
     id = "ruff-format",
-    name = "format with ruff",
-    exclude = "^addon/globalPlugins/oxidizedBraille/louis_py/"
+    name = "format with ruff"
   }
 ]
 

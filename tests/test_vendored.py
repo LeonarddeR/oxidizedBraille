@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest import mock
 
 from tests import TABLES_DIR
 
@@ -27,7 +28,6 @@ class TestVendoredLouisPy(unittest.TestCase):
 	def test_translator_uses_louis_table_path(self):
 		from globalPlugins.oxidizedBraille import louis_py
 
-		os.environ["LOUIS_TABLE_PATH"] = str(TABLES_DIR)
-		self.addCleanup(os.environ.pop, "LOUIS_TABLE_PATH", None)
-		translator = louis_py.Translator(["mini.ctb"])
+		with mock.patch.dict(os.environ, {"LOUIS_TABLE_PATH": str(TABLES_DIR)}):
+			translator = louis_py.Translator(["mini.ctb"])
 		self.assertEqual(translator.translate("abc"), "\u2801\u2803\u2809")

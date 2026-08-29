@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 
+from .louis_py import EmphasisSpan
+
 UNICODE_BRAILLE_START = 0x2800
 UNICODE_BRAILLE_END = 0x28FF
 UNDEFINED_CELL = 0xFF
@@ -52,25 +54,25 @@ def typeformToEmphasis(
 	typeform: Sequence[int] | None,
 	classes: Mapping[int, str],
 	length: int,
-) -> list[tuple[str, int, int]]:
-	"""Run-length encode per-character typeform flags into ``(class, start, end)`` spans.
+) -> list[EmphasisSpan]:
+	"""Run-length encode per-character typeform flags into one span per uninterrupted run of a class.
 
 	The flags are padded with plain text or truncated to ``length``.
-	Every class in ``classes`` yields its own spans, so combined flags produce overlapping spans.
 	"""
-	if typeform is None:
+	if typeform is None or not any(typeform):
 		return []
-	flags = list(typeform[:length]) + [0] * (length - len(typeform))
-	spans: list[tuple[str, int, int]] = []
-	for bit, className in classes.items():
-		start: int | None = None
-		for index, flag in enumerate(flags):
-			active = bool(flag & bit)
-			if active and start is None:
-				start = index
-			elif not active and start is not None:
-				spans.append((className, start, index))
-				start = None
-		if start is not None:
-			spans.append((className, start, len(flags)))
+	flags = [int(flag) for flag in typeform[:length]]
+	# Padding to the length plus a closing zero, so every run ends inside the loop.
+	flags.extend([0] * (length - len(flags) + 1))
+	spans: list[EmphasisSpan] = []
+	starts: dict[int, int | None] = dict.fromkeys(classes)
+	for index, value in enumerate(flags):
+		for bit, className in classes.items():
+			start = starts[bit]
+			if value & bit:
+				if start is None:
+					starts[bit] = index
+			elif start is not None:
+				spans.append(EmphasisSpan(className, start, index))
+				starts[bit] = None
 	return spans
