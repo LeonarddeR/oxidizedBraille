@@ -127,7 +127,7 @@ class TestTranslate(PatchTestCase):
 		)
 		self.module.translate(["mini.ctb"], "abc", typeform=[1, 0, 0], mode=2)
 		kwargs = spy.call_args.kwargs
-		self.assertEqual(kwargs["mode"], int(louis_py.TranslationMode.COMPBRL_AT_CURSOR))
+		self.assertEqual(kwargs["mode"], louis_py.TranslationMode.COMPBRL_AT_CURSOR)
 		self.assertEqual(kwargs["emphasis"], [("italic", 0, 1)])
 
 	def test_broken_table_falls_back_with_untouched_arguments(self):
@@ -159,7 +159,7 @@ class TestBackTranslate(PatchTestCase):
 		self.module.backTranslate(["mini.ctb"], [1], mode=256)
 		self.assertEqual(
 			spy.call_args.kwargs["mode"],
-			int(louis_py.TranslationMode.PARTIAL_TRANS | louis_py.TranslationMode.NO_UNDEFINED),
+			louis_py.TranslationMode.PARTIAL_TRANS | louis_py.TranslationMode.NO_UNDEFINED,
 		)
 
 	def test_broken_table_falls_back_with_the_same_arguments(self):
