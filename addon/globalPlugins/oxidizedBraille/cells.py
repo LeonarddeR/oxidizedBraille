@@ -17,26 +17,50 @@ UNDEFINED_CELL = 0xFF
 
 
 def isUnicodeBraille(char: str) -> bool:
+	"""Whether a character is in the Unicode braille block.
+
+	:param char: A single character.
+	"""
 	return UNICODE_BRAILLE_START <= ord(char) <= UNICODE_BRAILLE_END
 
 
 def unicodeToCells(braille: str) -> list[int]:
-	"""Map every character to a cell, so the result is index-aligned with the input."""
+	"""Map every character to a cell, so the result is index-aligned with the input.
+
+	:param braille: Text as louis-rs outputs it, normally Unicode braille.
+	:return: One cell per character; a character outside the braille block
+		becomes :data:`UNDEFINED_CELL`.
+	"""
 	return [
 		ord(char) - UNICODE_BRAILLE_START if isUnicodeBraille(char) else UNDEFINED_CELL for char in braille
 	]
 
 
 def cellsToUnicode(cells: Iterable[int]) -> str:
+	"""Convert cells to Unicode braille.
+
+	:param cells: Braille cells; every cell is masked to a byte.
+	:return: One braille character per cell.
+	"""
 	return "".join(chr(UNICODE_BRAILLE_START + (cell & 0xFF)) for cell in cells)
 
 
 def stripUnicodeBraille(text: str) -> str:
+	"""Remove every Unicode braille character from text.
+
+	:param text: Text as louis-rs outputs it.
+	:return: ``text`` without its braille characters.
+	"""
 	return "".join(char for char in text if not isUnicodeBraille(char))
 
 
 def mapFlags(value: int, mapping: Mapping[int, int]) -> int:
-	"""Translate the bits of ``value`` through ``mapping``; bits without a mapping are dropped."""
+	"""Translate the bits of ``value`` through ``mapping``; bits without a mapping are dropped.
+
+	:param value: Bit flags to translate.
+	:param mapping: Source bits to the target bits they stand for.
+	:return: The target bits of every source bit set in ``value``.
+	"""
 	result = 0
 	for sourceBit, targetBit in mapping.items():
 		if value & sourceBit:
@@ -45,6 +69,12 @@ def mapFlags(value: int, mapping: Mapping[int, int]) -> int:
 
 
 def normalizeCursor(cursorPos: int | None, length: int) -> int | None:
+	"""Clamp a cursor position to the text it belongs to.
+
+	:param cursorPos: The cursor position, or ``None`` for no cursor.
+	:param length: The length of the text.
+	:return: The position clamped to ``0`` through ``length``, or ``None`` for no cursor.
+	"""
 	if cursorPos is None:
 		return None
 	return min(max(cursorPos, 0), length)
@@ -57,7 +87,11 @@ def typeformToEmphasis(
 ) -> list[EmphasisSpan]:
 	"""Run-length encode per-character typeform flags into one span per uninterrupted run of a class.
 
-	The flags are padded with plain text or truncated to ``length``.
+	:param typeform: One flag value per character, or ``None`` for no formatting.
+		The flags are padded with plain text or truncated to ``length``.
+	:param classes: Typeform bits to the emphasis class names they stand for.
+	:param length: The length of the text the flags belong to.
+	:return: The emphasis spans, with end-exclusive character offsets.
 	"""
 	if typeform is None or not any(typeform):
 		return []

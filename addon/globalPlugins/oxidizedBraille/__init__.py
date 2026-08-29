@@ -19,7 +19,14 @@ addon = addonHandler.getCodeAddon()
 
 
 def _compile(tables: tuple[str, ...], backward: bool) -> louis_py.Translator:
-	"""Resolve table names the way NVDA does, then compile them for louis-rs."""
+	"""Resolve table names the way NVDA does, then compile them for louis-rs.
+
+	:param tables: Table names as NVDA passes them to ``louisHelper.translate``.
+	:param backward: Whether the translator back-translates braille to text.
+	:return: A translator for the resolved tables.
+	:raises LookupError: If NVDA cannot resolve one of the tables.
+	:raises louis_py.TableParseError: If louis-rs cannot compile the resolved tables.
+	"""
 	paths = tuple(louisHelper._resolveTableInner(list(tables)))
 	return translator.compileTranslator(paths, backward, brailleTables.TABLES_DIR)
 
@@ -42,6 +49,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		)
 
 	def _onConfigReset(self) -> None:
+		"""Forget compiled translators and reported failures."""
 		if self._patch is not None:
 			self._patch.clearCache()
 

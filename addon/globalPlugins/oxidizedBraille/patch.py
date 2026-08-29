@@ -44,6 +44,9 @@ class LouisHelperPatch:
 	"""Runs translations through louis-rs, falling back to the original liblouis functions on failure."""
 
 	def __init__(self, compile: CompileFunction):
+		"""
+		:param compile: Compiles a translator for table names as NVDA passes them and a direction.
+		"""
 		self._compile = compile
 		self._translators: dict[TableKey, louis_py.Translator | Exception] = {}
 		self._originals: dict[str, Callable[..., Any]] = {}
@@ -72,6 +75,14 @@ class LouisHelperPatch:
 		work: Callable[[louis_py.Translator], T],
 		fallback: Callable[[], T],
 	) -> T:
+		"""Run ``work`` with the translator for ``tableList``, or ``fallback`` when louis-rs fails.
+
+		:param tableList: Table names as NVDA passes them.
+		:param backward: Whether to back-translate braille to text.
+		:param work: Receives the translator and returns the result of a translation.
+		:param fallback: Runs the original liblouis function with the original arguments.
+		:return: The result of ``work``, or of ``fallback``.
+		"""
 		key: TableKey = (tuple(tableList), backward)
 		try:
 			return work(self._translator(key))
@@ -82,7 +93,11 @@ class LouisHelperPatch:
 			return fallback()
 
 	def _report(self, key: TableKey, exc: BaseException) -> None:
-		"""Log a failure once per table list and direction."""
+		"""Log a failure once per table list and direction.
+
+		:param key: The table list and direction the failure belongs to.
+		:param exc: The exception that was raised.
+		"""
 		if key in self._reported:
 			return
 		self._reported.add(key)
@@ -109,6 +124,10 @@ class LouisHelperPatch:
 		cursorPos: int | None = None,
 		mode: int = 0,
 	) -> tuple[list[int], list[int], list[int], int | None]:
+		"""Translate text into braille cells through louis-rs.
+
+		The parameters and the result are those of ``louisHelper.translate``.
+		"""
 		text = inbuf.replace("\0", "")
 		return self._run(
 			tableList,
@@ -124,6 +143,10 @@ class LouisHelperPatch:
 		)
 
 	def backTranslate(self, tableList: list[str], cells: list[int], mode: int = 0) -> str:
+		"""Back-translate braille cells into text through louis-rs.
+
+		The parameters and the result are those of ``louisHelper.backTranslate``.
+		"""
 		return self._run(
 			tableList,
 			True,
@@ -136,7 +159,11 @@ class LouisHelperPatch:
 		)
 
 	def install(self, module: Any) -> None:
-		"""Replace ``translate`` and ``backTranslate`` on the louisHelper module with this patch's methods."""
+		"""Replace ``translate`` and ``backTranslate`` on the louisHelper module with this patch's methods.
+
+		:param module: The ``louisHelper`` module, or a stand-in with the same two functions.
+		:raises RuntimeError: If this or another patch is already installed.
+		"""
 		if self._originals:
 			raise RuntimeError("The patch is already installed")
 		if any(
@@ -149,7 +176,10 @@ class LouisHelperPatch:
 			setattr(module, name, getattr(self, name))
 
 	def uninstall(self, module: Any) -> None:
-		"""Restore the functions captured by :meth:`install`, unless someone else replaced them since."""
+		"""Restore the functions captured by :meth:`install`, unless someone else replaced them since.
+
+		:param module: The module :meth:`install` patched.
+		"""
 		for name, original in self._originals.items():
 			if getattr(getattr(module, name), "__self__", None) is self:
 				setattr(module, name, original)
@@ -161,5 +191,6 @@ class LouisHelperPatch:
 		self.clearCache()
 
 	def clearCache(self) -> None:
+		"""Forget compiled translators and reported failures."""
 		self._translators.clear()
 		self._reported.clear()
