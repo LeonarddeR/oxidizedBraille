@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from itertools import groupby
 
 from .louis_py import EmphasisSpan
 
@@ -83,32 +84,28 @@ def typeformToEmphasis(
 	formatting: ``[ITALIC, ITALIC | BOLD, ITALIC]`` means all three characters are italic and
 	the second one is also bold. louis-rs wants one span per stretch of characters sharing a
 	formatting class, as the class name plus start and end offsets, end exclusive. The example
-	becomes ``[("bold", 1, 2), ("italic", 0, 3)]``.
+	becomes ``[("italic", 0, 3), ("bold", 1, 2)]``.
 
-	Every bit in ``classes`` is tracked on its own: a span opens at the first character that has
-	the bit and closes at the first later character without it, so a run of one class is not cut
-	by other bits coming and going inside it. Spans are listed in the order their runs end.
+	Every bit in ``classes`` is handled on its own: the flags are masked to that bit and cut into
+	runs of equal value, and every run with the bit set becomes a span, so a run of one class is
+	not cut by other bits coming and going inside it.
 
 	:param typeform: One flag value per character, or ``None`` for no formatting. Missing values
 		count as plain text, surplus values are ignored.
 	:param classes: Typeform bits and the louis-rs class name each one stands for.
 	:param length: The number of characters in the text; no span reaches past it.
-	:return: The emphasis spans, in the order their runs end.
+	:return: The emphasis spans, grouped by class in the order of ``classes``, then by position.
 	"""
 	if typeform is None or not any(typeform):
 		return []
 	flags = [int(flag) for flag in typeform[:length]]
-	# Padding to the length plus a closing zero, so every run ends inside the loop.
-	flags.extend([0] * (length - len(flags) + 1))
+	flags.extend([0] * (length - len(flags)))
 	spans: list[EmphasisSpan] = []
-	starts: dict[int, int | None] = dict.fromkeys(classes)
-	for index, value in enumerate(flags):
-		for bit, className in classes.items():
-			start = starts[bit]
-			if value & bit:
-				if start is None:
-					starts[bit] = index
-			elif start is not None:
-				spans.append(EmphasisSpan(className, start, index))
-				starts[bit] = None
+	for bit, className in classes.items():
+		start = 0
+		for isSet, run in groupby(flag & bit for flag in flags):
+			end = start + len(list(run))
+			if isSet:
+				spans.append(EmphasisSpan(className, start, end))
+			start = end
 	return spans

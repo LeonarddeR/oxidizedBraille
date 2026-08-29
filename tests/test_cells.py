@@ -73,7 +73,7 @@ class TestTypeformToEmphasis(unittest.TestCase):
 	def test_class_run_continues_across_a_change_of_other_flags(self):
 		self.assertEqual(
 			cells.typeformToEmphasis([1, 5, 1], CLASSES, 3),
-			[("bold", 1, 2), ("italic", 0, 3)],
+			[("italic", 0, 3), ("bold", 1, 2)],
 		)
 
 	def test_shorter_typeform_is_padded_with_plain(self):
