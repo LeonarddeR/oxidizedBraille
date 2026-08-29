@@ -36,7 +36,7 @@ def fallback() -> str:
 class TestCompileTables(unittest.TestCase):
 	def test_resolves_names_like_nvda_and_compiles(self):
 		compiled = patch.compileTables(("mini.ctb",), False)
-		self.assertEqual(compiled.translate("abc"), "⠁⠃⠉")
+		self.assertEqual(compiled.translate("abc"), "\u2801\u2803\u2809")
 
 	def test_unknown_table_raises_lookup_error(self):
 		with self.assertRaises(LookupError):
