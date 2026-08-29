@@ -48,6 +48,10 @@ def cellsToUnicode(cells: Iterable[int]) -> str:
 def stripUnicodeBraille(text: str) -> str:
 	"""Remove every Unicode braille character from text.
 
+	In back-translated text, braille characters only occur in the escape louis-rs writes for a cell
+	the table does not define (``\\x283f`` spelled in cells). Dead code once louis-rs honours
+	``NO_UNDEFINED``; there is no louis-rs issue for that yet.
+
 	:param text: Text as louis-rs outputs it.
 	:return: ``text`` without its braille characters.
 	"""

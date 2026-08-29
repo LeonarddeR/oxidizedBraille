@@ -23,6 +23,8 @@ TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
 def tablePath(dirs: Sequence[str]) -> Iterator[None]:
 	"""Point louis-rs at ``dirs`` while the block runs, then restore the previous value.
 
+	Dead code once louis-py exposes the table resolver of liblouis/louis-rs#28 (closes #15 and #16).
+
 	:param dirs: The directories to set :data:`TABLE_PATH_VARIABLE` to.
 	"""
 	previous = os.environ.get(TABLE_PATH_VARIABLE)
@@ -40,6 +42,10 @@ def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) ->
 	"""Compile absolute table paths, resolving their includes the way NVDA's own resolver does.
 
 	An included table is looked up next to each table first, then in the built-in table directory.
+	louis-rs finds tables and ``include`` lines only through :data:`TABLE_PATH_VARIABLE`
+	(liblouis/louis-rs#15 and #16, fixed by #28), so those directories are put there while
+	compiling. Once louis-py exposes the ``SearchDirs`` resolver of #28, they are passed to the
+	translator instead and :func:`tablePath` goes.
 
 	:param tables: Absolute paths of the tables to compile.
 	:param backward: Whether the translator back-translates braille to text.
@@ -101,8 +107,9 @@ def translateText(
 def backTranslateCells(compiled: louis_py.Translator, cells: Sequence[int], *, mode: int) -> str:
 	"""Back-translate cells the way ``louisHelper.backTranslate`` does, dropping undefined cells.
 
-	louis-rs renders a cell it cannot back-translate as an escape made of braille characters,
-	so removing braille characters from the output leaves only the translated text.
+	louis-rs accepts ``NO_UNDEFINED`` without applying it and renders a cell it cannot back-translate
+	as an escape made of braille characters, so removing braille characters from the output leaves
+	only the translated text. The stripping is dead code once louis-rs honours the mode.
 
 	:param compiled: A backward translator.
 	:param cells: The braille cells to back-translate; every cell is masked to a byte.

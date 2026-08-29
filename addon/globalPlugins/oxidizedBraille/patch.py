@@ -25,7 +25,11 @@ MODE_MAP: Mapping[int, int] = {
 	louisHelper.TranslationMode.COMPBRL_AT_CURSOR: louis_py.TranslationMode.COMPBRL_AT_CURSOR,
 	louisHelper.TranslationMode.PARTIAL_TRANS: louis_py.TranslationMode.PARTIAL_TRANS,
 }
-"""NVDA translation mode bits and the louis-rs mode bits they map to."""
+"""NVDA translation mode bits and the louis-rs mode bits they map to.
+
+louis-rs accepts both bits without applying them yet: liblouis/louis-rs#20 covers
+``COMPBRL_AT_CURSOR`` and #19 ``PARTIAL_TRANS``.
+"""
 
 TYPEFORM_CLASSES: Mapping[int, str] = {
 	int(louisHelper.Typeform.ITALIC): "italic",
