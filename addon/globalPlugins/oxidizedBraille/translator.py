@@ -2,15 +2,12 @@
 # Copyright 2026 Leonard de Ruijter <alderuijter@gmail.com>
 # License: GNU General Public License version 2.0 or later
 
-"""Compiles louis-rs translators for NVDA's tables, caches them and shapes their results."""
+"""Compiles louis-rs translators for NVDA's tables and shapes their results."""
 
 from __future__ import annotations
 
 import os
-import threading
-import time
-from collections import OrderedDict
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 
 from logHandler import log
@@ -27,11 +24,6 @@ from .cells import (
 
 TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
 """Environment variable louis-rs reads to locate tables and their includes."""
-
-TableKey = tuple[tuple[str, ...], bool]
-"""Table names as NVDA passes them, plus whether the direction is backward."""
-
-CompileFunction = Callable[[Sequence[str], bool], louis_py.Translator]
 
 
 def buildSearchDirs(tables: Sequence[str], builtinDir: str) -> tuple[str, ...]:
@@ -60,54 +52,6 @@ def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) ->
 	direction = louis_py.Direction.BACKWARD if backward else louis_py.Direction.FORWARD
 	with tablePath(buildSearchDirs(tables, builtinDir)):
 		return louis_py.Translator(list(tables), direction)
-
-
-class TranslatorCache:
-	"""Least-recently-used cache of translators by table names and direction.
-
-	A table list that failed to compile stays failed until :meth:`clear`; asking for it again
-	raises the failure without compiling again.
-	"""
-
-	def __init__(self, compile: CompileFunction, maxSize: int = 8):
-		self._compile = compile
-		self._maxSize = maxSize
-		self._entries: OrderedDict[TableKey, louis_py.Translator | Exception] = OrderedDict()
-		self._lock = threading.Lock()
-
-	def __len__(self) -> int:
-		return len(self._entries)
-
-	def get(self, tableList: Sequence[str], backward: bool) -> louis_py.Translator:
-		key: TableKey = (tuple(tableList), backward)
-		with self._lock:
-			entry = self._entries.get(key)
-			if entry is None:
-				entry = self._compileEntry(tableList, backward)
-				self._entries[key] = entry
-				while len(self._entries) > self._maxSize:
-					self._entries.popitem(last=False)
-			else:
-				self._entries.move_to_end(key)
-		if isinstance(entry, Exception):
-			raise entry.with_traceback(None)
-		return entry
-
-	def _compileEntry(self, tableList: Sequence[str], backward: bool) -> louis_py.Translator | Exception:
-		started = time.perf_counter()
-		try:
-			compiled = self._compile(tableList, backward)
-		except (louis_py.LouisError, LookupError) as exc:
-			return exc
-		direction = "backward" if backward else "forward"
-		log.debug(
-			f"Compiled {direction} translator for {list(tableList)} in {time.perf_counter() - started:.3f} s",
-		)
-		return compiled
-
-	def clear(self) -> None:
-		with self._lock:
-			self._entries.clear()
 
 
 def isRecoverable(exc: BaseException) -> bool:

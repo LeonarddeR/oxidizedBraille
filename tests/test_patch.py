@@ -36,31 +36,49 @@ def fallback() -> str:
 class TestFallback(unittest.TestCase):
 	def setUp(self):
 		log.records.clear()
-		self.cache = mock.Mock(**{"get.return_value": "translator"})
-		self.louisPatch = patch.LouisHelperPatch(self.cache)
+		self.compile = mock.Mock(return_value="translator")
+		self.louisPatch = patch.LouisHelperPatch(self.compile)
 
 	def test_success_uses_work_result(self):
 		self.assertEqual(self.louisPatch._run(["a.ctb"], False, work, fallback), "louis-rs via translator")
-		self.cache.get.assert_called_once_with(["a.ctb"], False)
+		self.compile.assert_called_once_with(("a.ctb",), False)
 
-	def test_table_parse_error_falls_back_and_logs_once(self):
-		self.cache.get.side_effect = louis_py.TableParseError("bad table")
+	def test_translator_is_compiled_once_per_table_list_and_direction(self):
+		for _ in range(2):
+			self.louisPatch._run(["a.ctb"], False, work, fallback)
+			self.louisPatch._run(["a.ctb"], True, work, fallback)
+		self.assertEqual(
+			self.compile.call_args_list,
+			[mock.call(("a.ctb",), False), mock.call(("a.ctb",), True)],
+		)
+
+	def test_table_parse_error_falls_back_logs_once_and_is_not_compiled_again(self):
+		self.compile.side_effect = louis_py.TableParseError("bad table")
 		for _ in range(2):
 			self.assertEqual(self.louisPatch._run(["a.ctb"], False, work, fallback), "liblouis")
 		self.assertEqual(len(log.records), 1)
 		self.assertEqual(len(log.recordsAt("error")), 1)
+		self.assertEqual(self.compile.call_count, 1)
 
 	def test_failure_is_reported_per_direction(self):
-		self.cache.get.side_effect = louis_py.TableParseError("bad table")
+		self.compile.side_effect = louis_py.TableParseError("bad table")
 		self.louisPatch._run(["a.ctb"], False, work, fallback)
 		self.louisPatch._run(["a.ctb"], True, work, fallback)
 		self.assertEqual(len(log.recordsAt("error")), 2)
 
-	def test_unresolvable_table_falls_back_and_logs_once(self):
-		self.cache.get.side_effect = LookupError("no such table")
+	def test_unresolvable_table_falls_back_logs_once_and_is_not_resolved_again(self):
+		self.compile.side_effect = LookupError("no such table")
 		for _ in range(2):
 			self.assertEqual(self.louisPatch._run(["missing.ctb"], False, work, fallback), "liblouis")
 		self.assertEqual(len(log.recordsAt("error")), 1)
+		self.assertEqual(self.compile.call_count, 1)
+
+	def test_unexpected_compile_error_falls_back_and_is_compiled_again(self):
+		self.compile.side_effect = RuntimeError("boom")
+		for _ in range(2):
+			self.assertEqual(self.louisPatch._run(["a.ctb"], False, work, fallback), "liblouis")
+		self.assertEqual(len(log.recordsAt("exception")), 1)
+		self.assertEqual(self.compile.call_count, 2)
 
 	def test_translation_error_falls_back_and_logs_once(self):
 		def failing(compiled: object) -> str:
@@ -84,12 +102,12 @@ class TestFallback(unittest.TestCase):
 		with self.assertRaises(KeyboardInterrupt):
 			self.louisPatch._run(["a.ctb"], False, interrupting, fallback)
 
-	def test_clear_cache_clears_cache_and_reports_again(self):
-		self.cache.get.side_effect = louis_py.TableParseError("bad table")
+	def test_clear_cache_compiles_and_reports_again(self):
+		self.compile.side_effect = louis_py.TableParseError("bad table")
 		self.louisPatch._run(["a.ctb"], False, work, fallback)
 		self.louisPatch.clearCache()
 		self.louisPatch._run(["a.ctb"], False, work, fallback)
-		self.cache.clear.assert_called_once_with()
+		self.assertEqual(self.compile.call_count, 2)
 		self.assertEqual(len(log.recordsAt("error")), 2)
 
 
@@ -101,7 +119,7 @@ class PatchTestCase(unittest.TestCase):
 		self.module = makeModule()
 		self.originalTranslate = self.module.translate
 		self.originalBackTranslate = self.module.backTranslate
-		self.louisPatch = patch.LouisHelperPatch(translator.TranslatorCache(oxidizedBraille._compile))
+		self.louisPatch = patch.LouisHelperPatch(oxidizedBraille._compile)
 		self.louisPatch.install(self.module)
 
 
@@ -170,8 +188,7 @@ class TestBackTranslate(PatchTestCase):
 class TestInstall(unittest.TestCase):
 	def setUp(self):
 		log.records.clear()
-		self.cache = mock.Mock()
-		self.louisPatch = patch.LouisHelperPatch(self.cache)
+		self.louisPatch = patch.LouisHelperPatch(mock.Mock())
 		self.module = makeModule()
 		self.originalTranslate = self.module.translate
 		self.originalBackTranslate = self.module.backTranslate
@@ -183,10 +200,11 @@ class TestInstall(unittest.TestCase):
 
 	def test_uninstall_restores_both_functions_and_clears_the_cache(self):
 		self.louisPatch.install(self.module)
+		spy = self.enterContext(mock.patch.object(self.louisPatch, "clearCache"))
 		self.louisPatch.uninstall(self.module)
 		self.assertIs(self.module.translate, self.originalTranslate)
 		self.assertIs(self.module.backTranslate, self.originalBackTranslate)
-		self.cache.clear.assert_called_once_with()
+		spy.assert_called_once_with()
 
 	def test_double_install_raises(self):
 		self.louisPatch.install(self.module)

@@ -2,7 +2,7 @@
 # Copyright 2026 Leonard de Ruijter <alderuijter@gmail.com>
 # License: GNU General Public License version 2.0 or later
 
-"""Tests for table lookup, translator caching and result shaping in ``translator``."""
+"""Tests for table lookup and result shaping in ``translator``."""
 
 from __future__ import annotations
 
@@ -92,76 +92,6 @@ class TestCompileTranslator(unittest.TestCase):
 		with self.assertRaises(louis_py.TableParseError) as context:
 			translator.compileTranslator([BROKEN], False, TABLES)
 		self.assertTrue(context.exception.errors)
-
-
-class TestTranslatorCache(unittest.TestCase):
-	def setUp(self):
-		log.records.clear()
-		self.compile = mock.Mock(side_effect=self.compileTable)
-		self.cache = translator.TranslatorCache(self.compile, maxSize=2)
-
-	@staticmethod
-	def compileTable(tableList: list[str], backward: bool) -> louis_py.Translator:
-		return translator.compileTranslator([str(TABLES_DIR / name) for name in tableList], backward, TABLES)
-
-	def test_same_key_returns_same_object_without_recompiling(self):
-		first = self.cache.get(["mini.ctb"], backward=False)
-		self.assertIs(self.cache.get(["mini.ctb"], backward=False), first)
-		self.assertEqual(self.compile.call_count, 1)
-
-	def test_backward_gives_different_object(self):
-		forward = self.cache.get(["mini.ctb"], backward=False)
-		backward = self.cache.get(["mini.ctb"], backward=True)
-		self.assertIsNot(forward, backward)
-		self.assertEqual(backward.translate("\u2801"), "a")
-
-	def test_oldest_entry_is_evicted_beyond_max_size(self):
-		first = self.cache.get(["mini.ctb"], backward=False)
-		self.cache.get(["mini.ctb"], backward=True)
-		self.cache.get(["include.ctb"], backward=False)
-		self.assertEqual(len(self.cache), 2)
-		self.assertIsNot(self.cache.get(["mini.ctb"], backward=False), first)
-
-	def test_clear_drops_entries(self):
-		first = self.cache.get(["mini.ctb"], backward=False)
-		self.cache.clear()
-		self.assertEqual(len(self.cache), 0)
-		self.assertIsNot(self.cache.get(["mini.ctb"], backward=False), first)
-
-	def test_failed_compile_is_raised_again_without_recompiling(self):
-		for _ in range(2):
-			with self.assertRaises(louis_py.TableParseError) as context:
-				self.cache.get(["broken.ctb"], backward=False)
-			self.assertTrue(context.exception.errors)
-		self.assertEqual(self.compile.call_count, 1)
-
-	def test_unresolvable_table_is_cached_as_failure(self):
-		self.compile.side_effect = LookupError("no such table")
-		for _ in range(2):
-			with self.assertRaises(LookupError):
-				self.cache.get(["missing.ctb"], backward=False)
-		self.assertEqual(self.compile.call_count, 1)
-
-	def test_clear_forgets_failures(self):
-		with self.assertRaises(louis_py.TableParseError):
-			self.cache.get(["broken.ctb"], backward=False)
-		self.cache.clear()
-		with self.assertRaises(louis_py.TableParseError):
-			self.cache.get(["broken.ctb"], backward=False)
-		self.assertEqual(self.compile.call_count, 2)
-
-	def test_unexpected_error_propagates_and_is_not_cached(self):
-		self.compile.side_effect = RuntimeError("boom")
-		for _ in range(2):
-			with self.assertRaises(RuntimeError):
-				self.cache.get(["mini.ctb"], backward=False)
-		self.assertEqual(self.compile.call_count, 2)
-
-	def test_compile_is_logged_at_debug_only_on_a_miss(self):
-		self.cache.get(["mini.ctb"], backward=False)
-		self.assertEqual(len(log.recordsAt("debug")), 1)
-		self.cache.get(["mini.ctb"], backward=False)
-		self.assertEqual(len(log.recordsAt("debug")), 1)
 
 
 class TestIsRecoverable(unittest.TestCase):
