@@ -35,10 +35,10 @@ Tests are `unittest`; `tests/__init__.py` puts `addon/` on `sys.path` and `tests
 
 Everything lives in one package, `addon/globalPlugins/oxidizedBraille/`:
 
-* `__init__.py` — `GlobalPlugin`: builds a `TranslatorCache` around `_compile` (NVDA's `louisHelper._resolveTableInner` plus `brailleTables.TABLES_DIR`), wraps it in a `LouisHelperPatch`, installs that on `louisHelper` and restores the originals on `terminate`; a config reset clears the cache.
+* `__init__.py` — `GlobalPlugin`: wraps `_compile` (NVDA's `louisHelper._resolveTableInner` plus `brailleTables.TABLES_DIR`) in a `LouisHelperPatch`, installs that on `louisHelper` and restores the originals on `terminate`; a config reset clears the patch's translators.
 * `cells.py` — pure conversions: Unicode braille ↔ cell integers, mode bit mapping, cursor clamping, typeform flags → `EmphasisSpan`s.
-* `translator.py` — `LOUIS_TABLE_PATH` handling (`buildSearchDirs`, `tablePath`, `compileTranslator`), `TranslatorCache` keyed on the table names NVDA passes (failed compiles are cached as failures), `translateText`, `backTranslateCells`, `isRecoverable`.
-* `patch.py` — `LouisHelperPatch`: the replacement `translate`/`backTranslate` with the NVDA→louis-rs mode and typeform maps, fallback to liblouis logged once per table list, `install`/`uninstall`.
+* `translator.py` — `LOUIS_TABLE_PATH` handling (`buildSearchDirs`, `tablePath`, `compileTranslator`), `translateText`, `backTranslateCells`, `isRecoverable`.
+* `patch.py` — `LouisHelperPatch`: the replacement `translate`/`backTranslate` with the NVDA→louis-rs mode and typeform maps, translators kept per table list and direction (a failed compile is kept as a failure), fallback to liblouis logged once per table list, `install`/`uninstall`.
 * `louis_py/` — vendored from a louis-py wheel; never edit. `VENDORED.txt` records the louis-py commit and louis-rs revision.
 
 ## louis-rs constraints the code works around

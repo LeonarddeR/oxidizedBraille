@@ -14,11 +14,17 @@ from logHandler import log
 
 from . import louis_py, translator
 from .cells import mapFlags, typeformToEmphasis
-from .translator import TableKey, TranslatorCache, isRecoverable
+from .translator import isRecoverable
 
 T = TypeVar("T")
 
 PATCHED_NAMES = ("translate", "backTranslate")
+
+TableKey = tuple[tuple[str, ...], bool]
+"""Table names as NVDA passes them, plus whether the direction is backward."""
+
+CompileFunction = Callable[[tuple[str, ...], bool], louis_py.Translator]
+"""Compiles a translator for table names as NVDA passes them and a direction."""
 
 MODE_MAP: Mapping[int, int] = {
 	louisHelper.TranslationMode.COMPBRL_AT_CURSOR: louis_py.TranslationMode.COMPBRL_AT_CURSOR,
@@ -37,10 +43,27 @@ TYPEFORM_CLASSES: Mapping[int, str] = {
 class LouisHelperPatch:
 	"""Runs translations through louis-rs, falling back to the original liblouis functions on failure."""
 
-	def __init__(self, cache: TranslatorCache):
-		self._cache = cache
+	def __init__(self, compile: CompileFunction):
+		self._compile = compile
+		self._translators: dict[TableKey, louis_py.Translator | Exception] = {}
 		self._originals: dict[str, Callable[..., Any]] = {}
 		self._reported: set[TableKey] = set()
+
+	def _translator(self, key: TableKey) -> louis_py.Translator:
+		"""Return the translator for ``key``, compiling it on first use.
+
+		A failed compile is raised again on every later call until :meth:`clearCache`.
+		"""
+		entry = self._translators.get(key)
+		if entry is None:
+			try:
+				entry = self._compile(*key)
+			except (louis_py.LouisError, LookupError) as exc:
+				entry = exc
+			self._translators[key] = entry
+		if isinstance(entry, Exception):
+			raise entry.with_traceback(None)
+		return entry
 
 	def _run(
 		self,
@@ -49,12 +72,13 @@ class LouisHelperPatch:
 		work: Callable[[louis_py.Translator], T],
 		fallback: Callable[[], T],
 	) -> T:
+		key: TableKey = (tuple(tableList), backward)
 		try:
-			return work(self._cache.get(tableList, backward))
+			return work(self._translator(key))
 		except BaseException as exc:
 			if not isRecoverable(exc):
 				raise
-			self._report((tuple(tableList), backward), exc)
+			self._report(key, exc)
 			return fallback()
 
 	def _report(self, key: TableKey, exc: BaseException) -> None:
@@ -137,5 +161,5 @@ class LouisHelperPatch:
 		self.clearCache()
 
 	def clearCache(self) -> None:
-		self._cache.clear()
+		self._translators.clear()
 		self._reported.clear()

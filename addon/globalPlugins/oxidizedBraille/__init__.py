@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import addonHandler
 import brailleTables
 import config
@@ -20,17 +18,17 @@ from . import louis_py, patch, translator
 addon = addonHandler.getCodeAddon()
 
 
-def _compile(tableList: Sequence[str], backward: bool) -> louis_py.Translator:
+def _compile(tables: tuple[str, ...], backward: bool) -> louis_py.Translator:
 	"""Resolve table names the way NVDA does, then compile them for louis-rs."""
-	tables = tuple(louisHelper._resolveTableInner(list(tableList)))
-	return translator.compileTranslator(tables, backward, brailleTables.TABLES_DIR)
+	paths = tuple(louisHelper._resolveTableInner(list(tables)))
+	return translator.compileTranslator(paths, backward, brailleTables.TABLES_DIR)
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def __init__(self):
 		super().__init__()
 		self._patch: patch.LouisHelperPatch | None = None
-		louisPatch = patch.LouisHelperPatch(translator.TranslatorCache(_compile))
+		louisPatch = patch.LouisHelperPatch(_compile)
 		try:
 			louisPatch.install(louisHelper)
 		except Exception:
