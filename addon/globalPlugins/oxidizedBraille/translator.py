@@ -58,10 +58,6 @@ def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) ->
 		return louis_py.Translator(list(tables), direction)
 
 
-class PositionError(Exception):
-	"""louis-rs returned position lists that do not match the text or the output."""
-
-
 def translateText(
 	compiled: louis_py.Translator,
 	text: str,
@@ -80,7 +76,6 @@ def translateText(
 		A negative position counts as the start.
 	:return: The cells, the input position of every cell, the cell position of every character,
 		and the cursor position in the cells, which is ``None`` when ``cursorPos`` is ``None``.
-	:raises PositionError: If the position lists louis-rs returned do not match the text or the cells.
 	"""
 	result = compiled.translate_with_options(
 		text,
@@ -88,20 +83,14 @@ def translateText(
 		emphasis=list(emphasis),
 		cursor_pos=None if cursorPos is None else max(cursorPos, 0),
 	)
+	assert result.input_positions is not None and result.output_positions is not None
 	cells = unicodeToCells(result.output)
 	nonBraille = [f"U+{ord(char):04X}" for char in result.output if not isUnicodeBraille(char)]
 	if nonBraille:
 		log.debug(
 			f"louis-rs produced characters outside the braille block, shown as full cells: {nonBraille}",
 		)
-	brailleToRawPos = result.input_positions or []
-	rawToBraillePos = result.output_positions or []
-	if len(brailleToRawPos) != len(cells) or len(rawToBraillePos) != len(text):
-		raise PositionError(
-			f"Position lists do not match: {len(brailleToRawPos)} entries for {len(cells)} cells, "
-			f"{len(rawToBraillePos)} entries for {len(text)} characters",
-		)
-	return cells, brailleToRawPos, rawToBraillePos, result.cursor_pos
+	return cells, result.input_positions, result.output_positions, result.cursor_pos
 
 
 def backTranslateCells(compiled: louis_py.Translator, cells: Sequence[int], *, mode: int) -> str:

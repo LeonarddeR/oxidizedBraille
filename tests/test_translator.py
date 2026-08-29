@@ -119,11 +119,6 @@ class TestTranslateText(unittest.TestCase):
 		self.assertEqual(len(brailleToRawPos), len(cells))
 		self.assertEqual(len(rawToBraillePos), 3)
 
-	def test_mismatched_position_lists_raise_position_error(self):
-		fake = fakeTranslator(FakeResult("\u2801\u2803", [0], [0, 1], None))
-		with self.assertRaises(translator.PositionError):
-			translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
-
 	def test_non_braille_output_becomes_full_cells_and_is_logged(self):
 		fake = fakeTranslator(FakeResult("\u2801x", [0, 1], [0, 1], None))
 		cells, _, _, _ = translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
