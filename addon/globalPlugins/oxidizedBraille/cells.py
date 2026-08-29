@@ -68,18 +68,6 @@ def mapFlags(value: int, mapping: Mapping[int, int]) -> int:
 	return result
 
 
-def normalizeCursor(cursorPos: int | None, length: int) -> int | None:
-	"""Clamp a cursor position to the text it belongs to.
-
-	:param cursorPos: The cursor position, or ``None`` for no cursor.
-	:param length: The length of the text.
-	:return: The position clamped to ``0`` through ``length``, or ``None`` for no cursor.
-	"""
-	if cursorPos is None:
-		return None
-	return min(max(cursorPos, 0), length)
-
-
 def typeformToEmphasis(
 	typeform: Sequence[int] | None,
 	classes: Mapping[int, str],

@@ -17,9 +17,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from ._stubs import TABLES_DIR, install
+from ._stubs import install
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "addon"))
 install()
-
-__all__ = ["TABLES_DIR"]

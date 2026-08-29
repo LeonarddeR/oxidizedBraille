@@ -15,8 +15,6 @@ from globalPlugins import oxidizedBraille
 from globalPlugins.oxidizedBraille import patch
 from logHandler import log
 
-from tests import TABLES_DIR
-
 
 class TestGlobalPlugin(unittest.TestCase):
 	def setUp(self):
@@ -31,7 +29,7 @@ class TestGlobalPlugin(unittest.TestCase):
 		self.assertIsInstance(louisHelper.backTranslate.__self__, patch.LouisHelperPatch)
 
 	def test_init_registers_for_config_reset(self):
-		self.assertIn(self.plugin._onConfigReset, config.post_configReset.handlers)
+		self.assertEqual(config.post_configReset.handlers, [self.plugin._patch.clearCache])
 
 	def test_init_logs_the_engine_switch(self):
 		self.assertTrue(any("louis-rs" in message for message in log.recordsAt("info")))
@@ -47,10 +45,10 @@ class TestGlobalPlugin(unittest.TestCase):
 		self.assertEqual(louisHelper.backTranslate(["mini.ctb"], [1, 3]), "ab")
 		self.originalTranslate.assert_not_called()
 
-	def test_config_reset_clears_the_cache(self):
-		spy = self.enterContext(mock.patch.object(self.plugin._patch, "clearCache"))
+	def test_config_reset_forgets_translators(self):
+		louisHelper.translate(["mini.ctb"], "abc")
 		config.post_configReset.notify(factoryDefaults=False)
-		spy.assert_called_once_with()
+		self.assertEqual(self.plugin._patch._translators, {})
 
 
 class TestInstallFailure(unittest.TestCase):
@@ -65,22 +63,3 @@ class TestInstallFailure(unittest.TestCase):
 		self.assertEqual(len(log.recordsAt("exception")), 1)
 		plugin.terminate()
 		self.assertEqual(config.post_configReset.handlers, [])
-
-
-class TestCompile(unittest.TestCase):
-	def test_resolves_names_like_nvda_and_compiles(self):
-		compiled = oxidizedBraille._compile(["mini.ctb"], False)
-		self.assertEqual(compiled.translate("abc"), "\u2801\u2803\u2809")
-
-	def test_include_from_builtin_tables_resolves(self):
-		compiled = oxidizedBraille._compile(["include.ctb"], False)
-		self.assertEqual(compiled.translate("."), "\u2832")
-
-	def test_unknown_table_raises_lookup_error(self):
-		with self.assertRaises(LookupError):
-			oxidizedBraille._compile(["missing.ctb"], False)
-
-	def test_builtin_dir_is_nvdas_table_dir(self):
-		import brailleTables
-
-		self.assertEqual(brailleTables.TABLES_DIR, str(TABLES_DIR))

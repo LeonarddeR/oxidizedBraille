@@ -16,6 +16,7 @@ import inspect
 import sys
 import types
 from collections.abc import Callable, Generator
+from functools import partialmethod
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock
@@ -33,23 +34,14 @@ class FakeLogger:
 	def __init__(self):
 		self.records: list[tuple[str, str]] = []
 
-	def _log(self, level: str, msg: Any):
+	def _log(self, level: str, msg: Any = "", *args: Any, **kwargs: Any):
 		self.records.append((level, str(msg)))
 
-	def debug(self, msg: Any, *args: Any, **kwargs: Any):
-		self._log("debug", msg)
-
-	def info(self, msg: Any, *args: Any, **kwargs: Any):
-		self._log("info", msg)
-
-	def warning(self, msg: Any, *args: Any, **kwargs: Any):
-		self._log("warning", msg)
-
-	def error(self, msg: Any, *args: Any, **kwargs: Any):
-		self._log("error", msg)
-
-	def exception(self, msg: Any = "", *args: Any, **kwargs: Any):
-		self._log("exception", msg)
+	debug = partialmethod(_log, "debug")
+	info = partialmethod(_log, "info")
+	warning = partialmethod(_log, "warning")
+	error = partialmethod(_log, "error")
+	exception = partialmethod(_log, "exception")
 
 	def recordsAt(self, level: str) -> list[str]:
 		return [msg for lvl, msg in self.records if lvl == level]
@@ -113,10 +105,7 @@ def _installLouisHelper() -> types.ModuleType:
 
 
 def install():
-	"""Install all stub modules. Idempotent; must run before importing the plugin package."""
-	if "louisHelper" in sys.modules:
-		return
-
+	"""Install all stub modules; must run before importing the plugin package."""
 	logHandler = _module("logHandler")
 	logHandler.log = FakeLogger()
 
