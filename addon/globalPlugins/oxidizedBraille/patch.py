@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypeVar
 
 import louisHelper
@@ -20,16 +20,16 @@ T = TypeVar("T")
 
 PATCHED_NAMES = ("translate", "backTranslate")
 
-MODE_MAP = {
-	int(louisHelper.TranslationMode.COMPBRL_AT_CURSOR): int(louis_py.TranslationMode.COMPBRL_AT_CURSOR),
-	int(louisHelper.TranslationMode.PARTIAL_TRANS): int(louis_py.TranslationMode.PARTIAL_TRANS),
+MODE_MAP: Mapping[int, int] = {
+	louisHelper.TranslationMode.COMPBRL_AT_CURSOR: louis_py.TranslationMode.COMPBRL_AT_CURSOR,
+	louisHelper.TranslationMode.PARTIAL_TRANS: louis_py.TranslationMode.PARTIAL_TRANS,
 }
 """NVDA translation mode bits and the louis-rs mode bits they map to."""
 
-TYPEFORM_CLASSES = {
-	int(louisHelper.Typeform.ITALIC): "italic",
-	int(louisHelper.Typeform.BOLD): "bold",
-	int(louisHelper.Typeform.UNDERLINE): "underline",
+TYPEFORM_CLASSES: Mapping[int, str] = {
+	louisHelper.Typeform.ITALIC: "italic",
+	louisHelper.Typeform.BOLD: "bold",
+	louisHelper.Typeform.UNDERLINE: "underline",
 }
 """NVDA typeform bits and the louis-rs emphasis classes they map to."""
 
@@ -106,7 +106,7 @@ class LouisHelperPatch:
 			work=lambda compiled: translator.backTranslateCells(
 				compiled,
 				cells,
-				mode=mapFlags(mode, MODE_MAP) | int(louis_py.TranslationMode.NO_UNDEFINED),
+				mode=mapFlags(mode, MODE_MAP) | louis_py.TranslationMode.NO_UNDEFINED,
 			),
 			fallback=lambda: self._originals["backTranslate"](tableList, cells, mode),
 		)
