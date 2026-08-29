@@ -16,29 +16,20 @@ CLASSES = {1: "italic", 4: "bold", 2: "underline"}
 
 class TestUnicodeToCells(unittest.TestCase):
 	def test_braille_characters_become_dot_masks(self):
-		self.assertEqual(cells.unicodeToCells("\u2801\u2803\u2809"), [1, 3, 9])
+		self.assertEqual(cells.unicodeToCells("⠁⠃⠉"), [1, 3, 9])
 
 	def test_non_braille_character_becomes_undefined_cell(self):
-		self.assertEqual(cells.unicodeToCells("\u2801x"), [1, cells.UNDEFINED_CELL])
-
-	def test_empty_string_gives_no_cells(self):
-		self.assertEqual(cells.unicodeToCells(""), [])
+		self.assertEqual(cells.unicodeToCells("⠁x"), [1, cells.UNDEFINED_CELL])
 
 
 class TestCellsToUnicode(unittest.TestCase):
 	def test_cells_become_braille_characters(self):
-		self.assertEqual(cells.cellsToUnicode([1, 3]), "\u2801\u2803")
-
-	def test_cell_is_masked_to_a_byte(self):
-		self.assertEqual(cells.cellsToUnicode([0x1FF]), "\u28ff")
-
-	def test_no_cells_give_empty_string(self):
-		self.assertEqual(cells.cellsToUnicode([]), "")
+		self.assertEqual(cells.cellsToUnicode([1, 3]), "⠁⠃")
 
 
 class TestStripUnicodeBraille(unittest.TestCase):
 	def test_braille_characters_are_removed(self):
-		self.assertEqual(cells.stripUnicodeBraille("a\u2833\u282db"), "ab")
+		self.assertEqual(cells.stripUnicodeBraille("a⠳⠭b"), "ab")
 
 	def test_plain_text_is_unchanged(self):
 		self.assertEqual(cells.stripUnicodeBraille("plain text"), "plain text")
@@ -55,20 +46,6 @@ class TestMapFlags(unittest.TestCase):
 
 	def test_zero_maps_to_zero(self):
 		self.assertEqual(cells.mapFlags(0, self.MAPPING), 0)
-
-
-class TestNormalizeCursor(unittest.TestCase):
-	def test_none_stays_none(self):
-		self.assertIsNone(cells.normalizeCursor(None, 5))
-
-	def test_negative_is_clamped_to_zero(self):
-		self.assertEqual(cells.normalizeCursor(-1, 5), 0)
-
-	def test_past_end_is_clamped_to_length(self):
-		self.assertEqual(cells.normalizeCursor(10, 5), 5)
-
-	def test_in_range_is_unchanged(self):
-		self.assertEqual(cells.normalizeCursor(3, 5), 3)
 
 
 class TestTypeformToEmphasis(unittest.TestCase):

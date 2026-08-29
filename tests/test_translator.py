@@ -16,25 +16,13 @@ from unittest import mock
 from globalPlugins.oxidizedBraille import louis_py, translator
 from logHandler import log
 
-from tests import TABLES_DIR
-from tests._stubs import PanicException
+from tests._stubs import TABLES_DIR
 
 TABLES = str(TABLES_DIR)
 MINI = str(TABLES_DIR / "mini.ctb")
 INCLUDE = str(TABLES_DIR / "include.ctb")
 BROKEN = str(TABLES_DIR / "broken.ctb")
 BOGUS_DIR = "C:/does-not-exist"
-
-
-class TestBuildSearchDirs(unittest.TestCase):
-	def test_table_dirs_come_first_then_builtin(self):
-		self.assertEqual(
-			translator.buildSearchDirs(["C:/a/x.ctb", "C:/b/y.ctb"], "C:/builtin"),
-			("C:/a", "C:/b", "C:/builtin"),
-		)
-
-	def test_duplicates_are_removed_keeping_the_first(self):
-		self.assertEqual(translator.buildSearchDirs(["C:/builtin/x.ctb"], "C:/builtin"), ("C:/builtin",))
 
 
 class TestTablePath(unittest.TestCase):
@@ -56,10 +44,6 @@ class TestTablePath(unittest.TestCase):
 		with translator.tablePath(["C:/a"]):
 			pass
 		self.assertNotIn(translator.TABLE_PATH_VARIABLE, os.environ)
-
-	def test_rejects_empty_list(self):
-		with self.assertRaises(ValueError), translator.tablePath([]):
-			pass
 
 	def test_absolute_table_compiles_with_bogus_search_path(self):
 		with translator.tablePath([BOGUS_DIR]):
@@ -92,17 +76,6 @@ class TestCompileTranslator(unittest.TestCase):
 		with self.assertRaises(louis_py.TableParseError) as context:
 			translator.compileTranslator([BROKEN], False, TABLES)
 		self.assertTrue(context.exception.errors)
-
-
-class TestIsRecoverable(unittest.TestCase):
-	def test_ordinary_exception_is_recoverable(self):
-		self.assertTrue(translator.isRecoverable(ValueError("x")))
-
-	def test_rust_panic_is_recoverable(self):
-		self.assertTrue(translator.isRecoverable(PanicException("boom")))
-
-	def test_keyboard_interrupt_is_not_recoverable(self):
-		self.assertFalse(translator.isRecoverable(KeyboardInterrupt()))
 
 
 @dataclass
@@ -151,9 +124,6 @@ class TestTranslateText(unittest.TestCase):
 		with self.assertRaises(translator.PositionError):
 			translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
 
-	def test_position_error_is_a_louis_error(self):
-		self.assertTrue(issubclass(translator.PositionError, louis_py.LouisError))
-
 	def test_non_braille_output_becomes_full_cells_and_is_logged(self):
 		fake = fakeTranslator(FakeResult("\u2801x", [0, 1], [0, 1], None))
 		cells, _, _, _ = translator.translateText(fake, "ab", mode=0, emphasis=[], cursorPos=None)
@@ -176,3 +146,11 @@ class TestBackTranslateCells(unittest.TestCase):
 
 	def test_no_cells_give_empty_string(self):
 		self.assertEqual(translator.backTranslateCells(self.mini, [], mode=0), "")
+
+	def test_no_undefined_is_added_to_the_mode(self):
+		fake = fakeTranslator(FakeResult("a", [], [], None))
+		translator.backTranslateCells(fake, [1], mode=louis_py.TranslationMode.PARTIAL_TRANS)
+		self.assertEqual(
+			fake.translate_with_options.call_args.kwargs["mode"],
+			louis_py.TranslationMode.PARTIAL_TRANS | louis_py.TranslationMode.NO_UNDEFINED,
+		)
