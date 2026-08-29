@@ -6,7 +6,7 @@
 
 This experimental add-on makes NVDA translate braille with [louis-rs](https://github.com/liblouis/louis-rs), a re-implementation of the liblouis braille translator in Rust, through the [louis-py](https://github.com/LeonarddeR/louis-py) Python bindings.
 It exists to test louis-rs with real braille tables and real usage.
-Expect differences from liblouis; please report them with the braille table you used.
+Expect differences from liblouis; please report them [upstream](https://github.com/liblouis/louis-rs/issues/new) with the braille table you used.
 
 ## What it does
 
@@ -46,26 +46,11 @@ As a result:
 * Routing and cursor positions may differ from liblouis in contracted tables.
 * A table included by another table is looked up next to the tables selected for translation and among NVDA's built-in tables. This differs from liblouis only when a table includes another table from a third directory ([louis-rs#15](https://github.com/liblouis/louis-rs/issues/15) and [#16](https://github.com/liblouis/louis-rs/issues/16), fixed by [louis-rs#28](https://github.com/liblouis/louis-rs/pull/28) but not yet available through louis-py).
 
-The add-on only works on 64-bit Windows.
-Restart NVDA after updating the add-on.
-
 ## Third-party components
 
-The add-on bundles louis-py, which contains louis-rs. Both are licensed under the GNU Lesser General Public License version 2.1 or later; the license text is shipped in the `louis_py` folder of the add-on together with a record of the exact versions bundled.
+The add-on bundles louis-py, which contains louis-rs. Both are licensed under the GNU Lesser General Public License version 2.1 or later.
 
 * louis-rs: <https://github.com/liblouis/louis-rs>
 * louis-py: <https://github.com/LeonarddeR/louis-py>
 
 The add-on itself is licensed under the GNU General Public License version 2 or later.
-
-## Development
-
-Building and testing follows the NVDA add-on template: `uv sync`, `uv run scons` to build the add-on, `uv run prek run --all-files` for linting, type checking and the unit tests.
-Type checking with ty expects a built NVDA source checkout in a sibling `nvda` directory.
-
-The `louis_py` package under `addon/globalPlugins/oxidizedBraille/louis_py` is copied from a louis-py wheel. To update it:
-
-1. In a louis-py checkout next to this repository, run `uv run --with maturin maturin build --release`.
-2. Run `uv run python scripts/vendorLouisPy.py ../louis-py/target/wheels/<wheel file>` here.
-
-The script records the louis-py commit and louis-rs revision in `louis_py/VENDORED.txt`.
