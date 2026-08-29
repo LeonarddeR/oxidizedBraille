@@ -16,20 +16,20 @@ CLASSES = {1: "italic", 4: "bold", 2: "underline"}
 
 class TestUnicodeToCells(unittest.TestCase):
 	def test_braille_characters_become_dot_masks(self):
-		self.assertEqual(cells.unicodeToCells("⠁⠃⠉"), [1, 3, 9])
+		self.assertEqual(cells.unicodeToCells("\u2801\u2803\u2809"), [1, 3, 9])
 
 	def test_non_braille_character_becomes_undefined_cell(self):
-		self.assertEqual(cells.unicodeToCells("⠁x"), [1, cells.UNDEFINED_CELL])
+		self.assertEqual(cells.unicodeToCells("\u2801x"), [1, cells.UNDEFINED_CELL])
 
 
 class TestCellsToUnicode(unittest.TestCase):
 	def test_cells_become_braille_characters(self):
-		self.assertEqual(cells.cellsToUnicode([1, 3]), "⠁⠃")
+		self.assertEqual(cells.cellsToUnicode([1, 3]), "\u2801\u2803")
 
 
 class TestStripUnicodeBraille(unittest.TestCase):
 	def test_braille_characters_are_removed(self):
-		self.assertEqual(cells.stripUnicodeBraille("a⠳⠭b"), "ab")
+		self.assertEqual(cells.stripUnicodeBraille("a\u2833\u282db"), "ab")
 
 	def test_plain_text_is_unchanged(self):
 		self.assertEqual(cells.stripUnicodeBraille("plain text"), "plain text")
