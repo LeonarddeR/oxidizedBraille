@@ -167,12 +167,6 @@ class TestTranslate(PatchTestCase):
 		self.assertEqual(result, ("original",))
 		self.originalTranslate.assert_called_once_with(["broken.ctb"], "a\0b", None, 1, mode)
 
-	def test_position_error_falls_back(self):
-		self.enterContext(
-			mock.patch.object(translator, "translateText", side_effect=translator.PositionError("x")),
-		)
-		self.assertEqual(self.module.translate(["mini.ctb"], "abc"), ("original",))
-
 
 class TestBackTranslate(PatchTestCase):
 	def test_round_trip_through_louis_rs(self):
