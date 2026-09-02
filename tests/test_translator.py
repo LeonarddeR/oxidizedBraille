@@ -25,32 +25,32 @@ BROKEN = str(TABLES_DIR / "broken.ctb")
 BOGUS_DIR = "C:/does-not-exist"
 
 
-class TestTablePath(unittest.TestCase):
-	def setUp(self):
-		self.enterContext(mock.patch.dict(os.environ))
-		os.environ.pop(translator.TABLE_PATH_VARIABLE, None)
-
-	def test_sets_variable_to_joined_dirs(self):
-		with translator.tablePath(["C:/a", "C:/b"]):
-			self.assertEqual(os.environ[translator.TABLE_PATH_VARIABLE], os.pathsep.join(["C:/a", "C:/b"]))
-
-	def test_restores_previous_value(self):
-		os.environ[translator.TABLE_PATH_VARIABLE] = "C:/before"
-		with translator.tablePath(["C:/a"]):
-			pass
-		self.assertEqual(os.environ[translator.TABLE_PATH_VARIABLE], "C:/before")
-
-	def test_removes_variable_that_was_unset(self):
-		with translator.tablePath(["C:/a"]):
-			pass
-		self.assertNotIn(translator.TABLE_PATH_VARIABLE, os.environ)
-
-	def test_absolute_table_compiles_with_bogus_search_path(self):
-		with translator.tablePath([BOGUS_DIR]):
-			self.assertEqual(louis_py.Translator([MINI]).translate("a"), "\u2801")
-
-
 class TestCompileTranslator(unittest.TestCase):
+	def test_environment_is_left_alone_while_compiling(self):
+		seen: list[str | None] = []
+		realTranslator = louis_py.Translator
+
+		def recordingTranslator(*args, **kwargs):
+			seen.append(os.environ.get("LOUIS_TABLE_PATH"))
+			return realTranslator(*args, **kwargs)
+
+		with (
+			mock.patch.dict(os.environ, {"LOUIS_TABLE_PATH": "C:/ambient"}),
+			mock.patch.object(translator.louis_py, "Translator", recordingTranslator),
+		):
+			translator.compileTranslator([MINI], False, BOGUS_DIR)
+		self.assertEqual(seen, ["C:/ambient"])
+
+	def test_ambient_table_path_variable_is_not_searched(self):
+		with tempfile.TemporaryDirectory() as directory:
+			table = Path(directory) / "custom.ctb"
+			table.write_text("include mini.ctb\n", encoding="utf-8")
+			with (
+				mock.patch.dict(os.environ, {"LOUIS_TABLE_PATH": TABLES}),
+				self.assertRaises(louis_py.TableParseError),
+			):
+				translator.compileTranslator([str(table)], False, BOGUS_DIR)
+
 	def test_compiles_forward_and_backward(self):
 		forward = translator.compileTranslator([MINI], False, BOGUS_DIR)
 		backward = translator.compileTranslator([MINI], True, BOGUS_DIR)

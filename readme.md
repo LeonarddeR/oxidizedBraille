@@ -44,7 +44,7 @@ As a result:
 * Bold, italic and underline are not indicated in braille output.
 * Characters a table does not define are shown as a short `\x` escape rather than liblouis's `\xHHHH` form. Cells typed on a braille display that the input table does not define are dropped.
 * Routing and cursor positions may differ from liblouis in contracted tables.
-* A table included by another table is looked up next to the tables selected for translation and among NVDA's built-in tables. This differs from liblouis only when a table includes another table from a third directory ([louis-rs#15](https://github.com/liblouis/louis-rs/issues/15) and [#16](https://github.com/liblouis/louis-rs/issues/16), fixed by [louis-rs#28](https://github.com/liblouis/louis-rs/pull/28) but not yet available through louis-py).
+* A table included by another table is looked up next to the tables selected for translation and among NVDA's built-in tables, and nowhere else. This differs from liblouis only when a table includes another table from a third directory: louis-rs resolves includes against that list rather than relative to the including table, by design ([louis-rs#15](https://github.com/liblouis/louis-rs/issues/15)).
 
 ## Third-party components
 

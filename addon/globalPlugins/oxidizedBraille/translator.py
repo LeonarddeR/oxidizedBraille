@@ -7,45 +7,19 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Sequence
 
 from logHandler import log
 
 from . import louis_py
 from .cells import cellsToUnicode, isUnicodeBraille, stripUnicodeBraille, unicodeToCells
 
-TABLE_PATH_VARIABLE = "LOUIS_TABLE_PATH"
-"""Environment variable louis-rs reads to locate tables and their includes."""
-
-
-@contextmanager
-def tablePath(dirs: Sequence[str]) -> Iterator[None]:
-	"""Point louis-rs at ``dirs`` while the block runs, then restore the previous value.
-
-	Dead code once louis-py exposes the table resolver of liblouis/louis-rs#28 (closes #15 and #16).
-
-	:param dirs: The directories to set :data:`TABLE_PATH_VARIABLE` to.
-	"""
-	previous = os.environ.get(TABLE_PATH_VARIABLE)
-	os.environ[TABLE_PATH_VARIABLE] = os.pathsep.join(dirs)
-	try:
-		yield
-	finally:
-		if previous is None:
-			os.environ.pop(TABLE_PATH_VARIABLE, None)
-		else:
-			os.environ[TABLE_PATH_VARIABLE] = previous
-
 
 def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) -> louis_py.Translator:
 	"""Compile absolute table paths, resolving their includes the way NVDA's own resolver does.
 
-	An included table is looked up next to each table first, then in the built-in table directory.
-	louis-rs finds tables and ``include`` lines only through :data:`TABLE_PATH_VARIABLE`
-	(liblouis/louis-rs#15 and #16, fixed by #28), so those directories are put there while
-	compiling. Once louis-py exposes the ``SearchDirs`` resolver of #28, they are passed to the
-	translator instead and :func:`tablePath` goes.
+	An included table is looked up next to each table first, then in the built-in table directory,
+	and nowhere else.
 
 	:param tables: Absolute paths of the tables to compile.
 	:param backward: Whether the translator back-translates braille to text.
@@ -54,8 +28,8 @@ def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) ->
 	:raises louis_py.TableParseError: If louis-rs cannot compile the tables.
 	"""
 	direction = louis_py.Direction.BACKWARD if backward else louis_py.Direction.FORWARD
-	with tablePath([*(os.path.dirname(table) for table in tables), builtinDir]):
-		return louis_py.Translator(list(tables), direction)
+	searchPath = [*(os.path.dirname(table) for table in tables), builtinDir]
+	return louis_py.Translator(list(tables), direction, search_path=searchPath)
 
 
 def translateText(

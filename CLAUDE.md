@@ -37,13 +37,13 @@ Everything lives in one package, `addon/globalPlugins/oxidizedBraille/`:
 
 * `__init__.py` — `GlobalPlugin`: installs a `LouisHelperPatch` on `louisHelper`, registers its `clearCache` with `config.post_configReset` and restores the originals on `terminate`.
 * `cells.py` — pure conversions: Unicode braille ↔ cell integers, mode bit mapping, typeform flags → `EmphasisSpan`s.
-* `translator.py` — `LOUIS_TABLE_PATH` handling (`tablePath`, `compileTranslator`), `translateText`, `backTranslateCells`.
+* `translator.py` — `compileTranslator` (passes each table's directory plus NVDA's built-in table directory to louis-py as `search_path=`), `translateText`, `backTranslateCells`.
 * `patch.py` — `compileTables` (NVDA's `louisHelper._resolveTableInner` plus `brailleTables.TABLES_DIR`), `isRecoverable`, and `LouisHelperPatch`: the replacement `translate`/`backTranslate` with the NVDA→louis-rs mode and typeform maps, translators kept per table list and direction (a failed compile is logged once and kept as a failure), fallback to liblouis, `install`/`uninstall`.
 * `louis_py/` — vendored from a louis-py wheel; never edit. `VENDORED.txt` records the louis-py commit and louis-rs revision.
 
 ## louis-rs constraints the code works around
 
-At the vendored revision louis-rs finds tables and `include` lines only through the `LOUIS_TABLE_PATH` environment variable (an empty value finds nothing, absolute paths work when it is set; liblouis/louis-rs#15 and #16, fixed by louis-rs PR #28 but not yet exposed by louis-py), does not apply translation modes (#19 `partialTrans`, #20 `compbrlAtCursor`) or emphasis, and renders undefined cells in back-translation as braille-character escapes (no issue filed). See the readme's "Known gaps" before changing behaviour here. The proper fix for table lookup is exposing the `SearchDirs` resolver of PR #28 through louis-py, which retires `tablePath`; honouring `NO_UNDEFINED` retires the braille stripping in `backTranslateCells`.
+At the vendored revision louis-rs looks tables and `include` lines up only in the directories louis-py is handed as `search_path=` (never relative to the including table; liblouis/louis-rs#15 was closed as by design), does not apply translation modes (#19 `partialTrans`, #20 `compbrlAtCursor`) or emphasis, and renders undefined cells in back-translation as braille-character escapes (no issue filed). See the readme's "Known gaps" before changing behaviour here. Honouring `NO_UNDEFINED` retires the braille stripping in `backTranslateCells`.
 
 ## Vendoring louis_py
 
