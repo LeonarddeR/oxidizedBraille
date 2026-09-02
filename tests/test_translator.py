@@ -41,6 +41,21 @@ class TestCompileTranslator(unittest.TestCase):
 			translator.compileTranslator([MINI], False, BOGUS_DIR)
 		self.assertEqual(seen, ["C:/ambient"])
 
+	def test_search_path_lists_each_directory_once_in_order(self):
+		searchPaths: list[list[str]] = []
+		realTranslator = louis_py.Translator
+
+		def recordingTranslator(*args, **kwargs):
+			searchPaths.append(kwargs["search_path"])
+			return realTranslator(*args, **kwargs)
+
+		with tempfile.TemporaryDirectory() as directory:
+			table = Path(directory) / "custom.ctb"
+			table.write_text("include mini.ctb\n", encoding="utf-8")
+			with mock.patch.object(translator.louis_py, "Translator", recordingTranslator):
+				translator.compileTranslator([str(table), MINI], False, TABLES)
+		self.assertEqual(searchPaths, [[directory, TABLES]])
+
 	def test_ambient_table_path_variable_is_not_searched(self):
 		with tempfile.TemporaryDirectory() as directory:
 			table = Path(directory) / "custom.ctb"

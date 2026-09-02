@@ -28,7 +28,7 @@ def compileTranslator(tables: Sequence[str], backward: bool, builtinDir: str) ->
 	:raises louis_py.TableParseError: If louis-rs cannot compile the tables.
 	"""
 	direction = louis_py.Direction.BACKWARD if backward else louis_py.Direction.FORWARD
-	searchPath = [*(os.path.dirname(table) for table in tables), builtinDir]
+	searchPath = list(dict.fromkeys([*(os.path.dirname(table) for table in tables), builtinDir]))
 	return louis_py.Translator(list(tables), direction, search_path=searchPath)
 
 
