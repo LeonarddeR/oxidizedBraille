@@ -43,7 +43,7 @@ Everything lives in one package, `addon/globalPlugins/oxidizedBraille/`:
 
 ## louis-rs constraints the code works around
 
-At the vendored revision louis-rs looks tables and `include` lines up only in the directories louis-py is handed as `search_path=` (never relative to the including table; liblouis/louis-rs#15 was closed as by design), does not apply translation modes (#19 `partialTrans`, #20 `compbrlAtCursor`) or emphasis, and renders undefined cells in back-translation as braille-character escapes (no issue filed). See the readme's "Known gaps" before changing behaviour here. Honouring `NO_UNDEFINED` retires the braille stripping in `backTranslateCells`.
+At the vendored revision louis-rs looks tables and `include` lines up only in the directories louis-py is handed as `search_path=`, does not apply translation modes (#19 `partialTrans`, #20 `compbrlAtCursor`) or emphasis, and renders undefined cells in back-translation as braille-character escapes (no issue filed). See the readme's "Known gaps" before changing behaviour here. Honouring `NO_UNDEFINED` retires the braille stripping in `backTranslateCells`.
 
 ## Vendoring louis_py
 
