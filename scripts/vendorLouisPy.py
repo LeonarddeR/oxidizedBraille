@@ -20,9 +20,12 @@ SKIPPED_SUFFIXES = (".pdb", ".pyc")
 
 
 def louisRsRevision() -> str:
-	with (LOUIS_PY_REPO / "Cargo.toml").open("rb") as cargoToml:
-		dependency = tomllib.load(cargoToml).get("dependencies", {}).get("louis-rs", {})
-	return dependency.get("rev", "unknown") if isinstance(dependency, dict) else "unknown"
+	with (LOUIS_PY_REPO / "Cargo.lock").open("rb") as cargoLock:
+		packages = tomllib.load(cargoLock).get("package", [])
+	for package in packages:
+		if package.get("name") == "louis-rs":
+			return package.get("source", "").partition("#")[2] or "unknown"
+	return "unknown"
 
 
 def louisPyCommit() -> str:

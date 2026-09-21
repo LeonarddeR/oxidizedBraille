@@ -4,7 +4,7 @@
 * Download [latest release](https://github.com/LeonarddeR/oxidizedBraille/releases/latest)
 * NVDA compatibility: 2026.3 and later
 
-This experimental add-on makes NVDA translate braille with [louis-rs](https://github.com/liblouis/louis-rs), a re-implementation of the liblouis braille translator in Rust, through the [louis-py](https://github.com/LeonarddeR/louis-py) Python bindings.
+This experimental add-on makes NVDA translate braille with [louis-rs](https://github.com/liblouis/louis-rs), a re-implementation of the liblouis braille translator in Rust, through the [louis-py](https://github.com/liblouis/louis-py) Python bindings.
 It exists to test louis-rs with real braille tables and real usage.
 Expect differences from liblouis; please report them [upstream](https://github.com/liblouis/louis-rs/issues/new) with the braille table you used.
 
@@ -41,7 +41,6 @@ As a result:
 
 * "Expand the word at the cursor to computer braille" has no effect ([louis-rs#20](https://github.com/liblouis/louis-rs/issues/20)).
 * Contracted braille input is translated as if every buffered word were complete, so intermediate words may read differently than with liblouis ([louis-rs#19](https://github.com/liblouis/louis-rs/issues/19)).
-* Bold, italic and underline are not indicated in braille output.
 * Characters a table does not define are shown as a short `\x` escape rather than liblouis's `\xHHHH` form. Cells typed on a braille display that the input table does not define are dropped.
 * Routing and cursor positions may differ from liblouis in contracted tables.
 
@@ -54,6 +53,6 @@ As a result:
 The add-on bundles louis-py, which contains louis-rs. Both are licensed under the GNU Lesser General Public License version 2.1 or later.
 
 * louis-rs: <https://github.com/liblouis/louis-rs>
-* louis-py: <https://github.com/LeonarddeR/louis-py>
+* louis-py: <https://github.com/liblouis/louis-py>
 
 The add-on itself is licensed under the GNU General Public License version 2 or later.
