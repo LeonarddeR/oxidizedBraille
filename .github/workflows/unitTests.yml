@@ -28,5 +28,8 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Copy louis_py into the add-on
+        run: uv run python scripts/copyLouisPy.py
+
       - name: Run test suite via unittest
         run: uv run python -m unittest discover -s tests -t . -v

@@ -12,5 +12,6 @@ sconstruct text eol=lf
 # https://mail.gnome.org/archives/kupfer-list/2010-June/msg00002.html
 *.po filter=cleanpo
 *.pyd binary
+*.whl binary
 *.ctb text eol=lf
 *.cti text eol=lf

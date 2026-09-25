@@ -31,6 +31,10 @@ Issues = "https://github.com/LeonarddeR/oxidizedBraille/issues"
 # PEP 735 dependency groups. `uv sync` installs the `dev` group by default, which
 # pulls in every tool needed to build, translate, lint and type check the add-on.
 [dependency-groups]
+# Bundled into the add-on by scripts/copyLouisPy.py
+addon = [
+	"louis-py==0.1.0",
+]
 # Build add-on
 build = [
 	"scons==4.11.1",
@@ -56,11 +60,18 @@ typecheck = [
 	"ty==0.0.75",
 ]
 dev = [
+	{ include-group = "addon" },
 	{ include-group = "build" },
 	{ include-group = "l10n" },
 	{ include-group = "lint" },
 	{ include-group = "typecheck" },
 ]
+
+[tool.setuptools]
+packages = []
+
+[tool.uv.sources]
+louis-py = { path = "wheels/louis_py-0.1.0-cp311-abi3-win_amd64.whl" }
 
 [tool.ruff]
 fix = true

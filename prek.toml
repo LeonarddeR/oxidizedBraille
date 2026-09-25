@@ -3,8 +3,6 @@
 #:schema https://www.schemastore.org/prek.json
 
 default_language_version = { python = "python3.13" }
-# Vendored louis-py package: kept byte-identical to the wheel it came from.
-exclude = "^addon/globalPlugins/oxidizedBraille/louis_py/"
 
 [[repos]]
 repo = "meta"
@@ -25,7 +23,7 @@ hooks = [
       "master"
     ]
   },
-  { id = "check-added-large-files" },
+  { id = "check-added-large-files", exclude = "^wheels/" },
   { id = "check-case-conflict" },
   { id = "check-merge-conflict" },
   {

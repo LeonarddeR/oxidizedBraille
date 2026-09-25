@@ -1,4 +1,0 @@
-wheel: louis_py-0.1.0-cp311-abi3-win_amd64.whl
-louis-py commit: fb7d3925b16fb55845813ec17f901a535b5c3611
-louis-rs revision: c454d7347f2fd1fa0e62ef795647a9b9f5f20758
-vendored on: 2026-09-21

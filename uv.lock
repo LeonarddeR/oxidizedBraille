@@ -71,6 +71,14 @@ wheels = [
 ]
 
 [[package]]
+name = "louis-py"
+version = "0.1.0"
+source = { path = "wheels/louis_py-0.1.0-cp311-abi3-win_amd64.whl" }
+wheels = [
+    { filename = "louis_py-0.1.0-cp311-abi3-win_amd64.whl", hash = "sha256:2d6426ecf17918698aa68fe6a6d8b1a4c64d0ac54c5ae4b5acf2b92d51d4bca0" },
+]
+
+[[package]]
 name = "lxml"
 version = "6.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -170,12 +178,16 @@ name = "oxidizedbraille"
 source = { editable = "." }
 
 [package.dev-dependencies]
+addon = [
+    { name = "louis-py" },
+]
 build = [
     { name = "markdown" },
     { name = "scons" },
 ]
 dev = [
     { name = "crowdin-api-client" },
+    { name = "louis-py" },
     { name = "lxml" },
     { name = "markdown" },
     { name = "markdown-link-attr-modifier" },
@@ -208,12 +220,14 @@ typecheck = [
 [package.metadata]
 
 [package.metadata.requires-dev]
+addon = [{ name = "louis-py", path = "wheels/louis_py-0.1.0-cp311-abi3-win_amd64.whl" }]
 build = [
     { name = "markdown", specifier = "==3.10.3" },
     { name = "scons", specifier = "==4.11.1" },
 ]
 dev = [
     { name = "crowdin-api-client", specifier = "==1.28.0" },
+    { name = "louis-py", path = "wheels/louis_py-0.1.0-cp311-abi3-win_amd64.whl" },
     { name = "lxml", specifier = "==6.1.2" },
     { name = "markdown", specifier = "==3.10.3" },
     { name = "markdown-link-attr-modifier", specifier = "==0.2.1" },

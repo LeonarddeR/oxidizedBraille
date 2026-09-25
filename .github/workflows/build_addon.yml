@@ -36,6 +36,8 @@ jobs:
       run: Add-Content $env:GITHUB_PATH "${{ steps.nvda.outputs.nvda-path }}/miscDeps/tools"
     - name: Install dependencies
       run: uv sync
+    - name: Copy louis_py into the add-on
+      run: uv run python scripts/copyLouisPy.py
 
     - name: Code checks
       run: $env:PREK_SKIP = "no-commit-to-branch"; uv run prek run --all-files

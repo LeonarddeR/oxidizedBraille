@@ -11,3 +11,4 @@ manifest.ini
 /[0-9]*.[0-9]*.[0-9]*.json
 *.egg-info
 *.pdb
+/addon/globalPlugins/oxidizedBraille/louis_py/
