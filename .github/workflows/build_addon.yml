@@ -29,7 +29,7 @@ jobs:
         path: ../nvda
         github-token: ${{ github.token }}
     - name: Install uv
-      uses: astral-sh/setup-uv@v10.0.1
+      uses: astral-sh/setup-uv@v10.2.0
       with:
         enable-cache: true
     - name: Add NVDA's gettext tools to PATH
